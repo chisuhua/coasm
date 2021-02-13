@@ -382,10 +382,10 @@ class VisitType(Enum):
 class Instr:
     FmtEnc = namedtuple('FmtEnc', ['bit_start', 'width', 'value'])
     fmt_enc = {}
-    fmt_enc["VOP2"] = FmtEnc(31, 1,  0b0)
+    fmt_enc["VOP2"] = FmtEnc(31, 1, 0b0)
     fmt_enc["VOP1"] = FmtEnc(31, 7, 0b1000001)
     fmt_enc["VOPC"] = FmtEnc(31, 7, 0b1000000)
-    fmt_enc["VOP3A"] =FmtEnc(31, 6, 0b100001)
+    fmt_enc["VOP3"] =FmtEnc(31, 6, 0b100001)
     fmt_enc["SOP1"] = FmtEnc(31, 9, 0b100001)
     fmt_enc["SOP2"] = FmtEnc(31, 2, 0b11)
     fmt_enc["SOPK"] = FmtEnc(31, 4, 0b1001)
@@ -424,7 +424,7 @@ class Instr:
         if name == "":
             print("Warn:create instr without correct op enum")
         else:
-            self.enc = fmt_enc[self.getFmtName()].value
+            self.enc = Instr.fmt_enc[self.getFmtName()].value
             self.op = self.OpcodeEnum[name.upper()].value
 
 
@@ -644,7 +644,8 @@ class InstrDmem(Instr):
 class InstrVALU_VOP2(InstrValu):
     def __init__(self, name=''):
         self.field = OrderedDict()
-        self.field["src0"]  = 9
+        self.field["src0"]  = 8
+        self.field["ssrc0_"]= 1
         self.field["vsrc1"] = 8
         self.field["vdst"]  = 8
         self.field["op"]    = 6
@@ -682,14 +683,31 @@ class InstrVALU_VOP2(InstrValu):
         V_CVT_PKRZ_F16_F32         = 0x26
 
     def genGrammarInstrClass(self):
-        return self.getInstrDefName() + " generic_reg (',' generic_reg)? ',' alu_expr_list ('#' lop_imm)?"
+        return self.getInstrDefName() + " vreg (',' generic_reg)? ',' vreg ('#' lop_imm)?"
+
+    def addOperand(self, operand):
+        super().addOperand(operand)
+        if len(self.operands) == 1:
+            assert(isinstance(operand, Reg))
+            self.vdst = operand.idx
+        elif len(self.operands) == 2:
+            assert(isinstance(operand, Reg))
+            self.src0 = operand.idx
+            if (operand.rtype == Reg.RegType.Scalar):
+                self.ssrc0_ = 1
+            else:
+                self.ssrc0_ = 0
+        elif len(self.operands) == 3:
+            assert(isinstance(operand, Reg))
+            self.vsrc1 = operand.idx
 
 
 
 class InstrVALU_VOP1(InstrValu):
     def __init__(self, name=''):
         self.field = OrderedDict()
-        self.field["src0"]  = 9
+        self.field["src0"]  = 8
+        self.field["ssrc0_"]  = 1
         self.field["op"]    = 8
         self.field["vdst"]  = 8
         self.field["enc"]         = 7
@@ -725,13 +743,27 @@ class InstrVALU_VOP1(InstrValu):
         V_MOVRELS_B32                 = 0x1a
 
     def genGrammarInstrClass(self):
-        return self.getInstrDefName() + " generic_reg ',' alu_expr_list"
+        return self.getInstrDefName() + " vreg ',' generic_reg"
+
+    def addOperand(self, operand):
+        super().addOperand(operand)
+        if len(self.operands) == 1:
+            assert(isinstance(operand, Reg))
+            self.vdst = operand.idx
+        elif len(self.operands) == 2:
+            assert(isinstance(operand, Reg))
+            self.src0 = operand.idx
+            if (operand.rtype == Reg.RegType.Scalar):
+                self.ssrc0_ = 1
+            else:
+                self.ssrc0_ = 0
 
 
 class InstrVALU_VOPC(InstrValu):
     def __init__(self, name=''):
         self.field = OrderedDict()
-        self.field["src0"]  = 9
+        self.field["src0"]  = 8
+        self.field["ssrc0_"] = 1
         self.field["vsrc1"]  = 8
         self.field["op"]    = 8
         self.field["enc"]         = 7
@@ -766,9 +798,22 @@ class InstrVALU_VOPC(InstrValu):
         V_CMP_GE_U32                = 0x1a
 
     def genGrammarInstrClass(self):
-        return self.getInstrDefName() + " generic_reg ',' alu_expr_list"
+        return self.getInstrDefName() + " vreg ',' generic_reg"
 
-class InstrVALU_VOP3A(InstrValu):
+    def addOperand(self, operand):
+        super().addOperand(operand)
+        if len(self.operands) == 1:
+            assert(isinstance(operand, Reg))
+            self.vdst = operand.idx
+        elif len(self.operands) == 2:
+            assert(isinstance(operand, Reg))
+            self.src0 = operand.idx
+            if (operand.rtype == Reg.RegType.Scalar):
+                self.ssrc0_ = 1
+            else:
+                self.ssrc0_ = 0
+
+class InstrVALU_VOP3(InstrValu):
     def __init__(self, name=''):
         self.field = OrderedDict()
         self.field["vdst"]      = 8
@@ -785,12 +830,12 @@ class InstrVALU_VOP3A(InstrValu):
         super().__init__(name)
 
     class OpcodeEnum(Enum):
-        V_CNDMASK_B32_VOP3A     = 0x1
-        V_ADD_F32_VOP3A         = 0x2
-        V_SUBREV_F32_VOP3A      = 0x3
-        V_MUL_F32_VOP3A         = 0x4
-        V_MUL_I32_I24_VOP3A     = 0x5
-        V_MAX_F32_VOP3A         = 0x6
+        V_CNDMASK_B32_VOP3     = 0x1
+        V_ADD_F32_VOP3         = 0x2
+        V_SUBREV_F32_VOP3      = 0x3
+        V_MUL_F32_VOP3         = 0x4
+        V_MUL_I32_I24_VOP3     = 0x5
+        V_MAX_F32_VOP3         = 0x6
         V_MAD_F32               = 0x7
         V_MAD_U32_U24           = 0x8
         V_BFE_U32               = 0x9
@@ -810,7 +855,32 @@ class InstrVALU_VOP3A(InstrValu):
         V_MUL_LO_I32            = 0x17
 
     def genGrammarInstrClass(self):
-        return self.getInstrDefName() + " generic_reg ',' generic_reg ',' generic_reg ',' alu_expr_list ('#' lop_imm)?"
+        return self.getInstrDefName() + " vreg ',' generic_reg ',' generic_reg ',' generic_reg"
+
+    def addOperand(self, operand):
+        super().addOperand(operand)
+        if len(self.operands) == 1:
+            assert(isinstance(operand, Reg))
+            self.sdst = operand.idx
+        elif len(self.operands) == 2:
+            assert(isinstance(operand, Reg))
+            self.src0 = operand.idx
+            if (operand.rtype == Reg.RegType.Scalar):
+                self.src0 += 0x100
+        elif len(self.operands) == 3:
+            assert(isinstance(operand, Reg))
+            self.src1 = operand.idx
+            if (operand.rtype == Reg.RegType.Scalar):
+                self.src1 += 0x100
+        elif len(self.operands) == 4:
+            assert(isinstance(operand, Reg))
+            self.src1 = operand.idx
+            if (operand.rtype == Reg.RegType.Scalar):
+                self.src1 += 0x100
+
+
+
+
 
  #------------------------------
 class InstrSALU_SOP1(InstrSalu):
@@ -832,8 +902,16 @@ class InstrSALU_SOP1(InstrSalu):
         S_AND_SAVEEXEC_B64       = 0x13
 
     def genGrammarInstrClass(self):
-        return self.getInstrDefName() + " generic_reg ',' alu_expr_list ('#' lop_imm)"
+        return self.getInstrDefName() + " sreg ',' sreg"
 
+    def addOperand(self, operand):
+        super().addOperand(operand)
+        if len(self.operands) == 1:
+            assert(isinstance(operand, Reg))
+            self.sdst = operand.idx
+        elif len(self.operands) == 2:
+            assert(isinstance(operand, Reg))
+            self.ssrc0 = operand.idx
 
 class InstrSALU_SOP2(InstrSalu):
     def __init__(self, name=''):
@@ -868,7 +946,20 @@ class InstrSALU_SOP2(InstrSalu):
         S_BFE_I32                = 0x1a
 
     def genGrammarInstrClass(self):
-        return self.getInstrDefName() + " generic_reg ',' generic_reg ',' alu_expr_list ('#' lop_imm)?"
+        #return self.getInstrDefName() + " sreg ',' sreg ',' alu_expr_list ('#' lop_imm)?"
+        return self.getInstrDefName() + " sreg ',' sreg ',' sreg"
+
+    def addOperand(self, operand):
+        super().addOperand(operand)
+        if len(self.operands) == 1:
+            assert(isinstance(operand, Reg))
+            self.sdst = operand.idx
+        elif len(self.operands) == 2:
+            assert(isinstance(operand, Reg))
+            self.ssrc0 = operand.idx
+        elif len(self.operands) == 3:
+            assert(isinstance(operand, Reg))
+            self.ssrc1 = operand.idx
 
 
 class InstrSALU_SOPK(InstrSalu):
@@ -887,7 +978,17 @@ class InstrSALU_SOPK(InstrSalu):
         S_MULK_I32                = 0x4
 
     def genGrammarInstrClass(self):
-        return self.getInstrDefName() + " generic_reg ',' number"
+        return self.getInstrDefName() + " sreg ',' number"
+
+    def addOperand(self, operand):
+        super().addOperand(operand)
+        if len(self.operands) == 1:
+            assert(isinstance(operand, Reg))
+            self.sdst = operand.idx
+        elif len(self.operands) == 2:
+            assert(isinstance(operand, int))
+            self.simm16 = operand
+
 
 class InstrSALU_SOPC(InstrSalu):
     def __init__(self, name=''):
@@ -910,7 +1011,16 @@ class InstrSALU_SOPC(InstrSalu):
         S_CMP_LE_U32                = 0x8
 
     def genGrammarInstrClass(self):
-        return self.getInstrDefName() + " generic_reg ',' generic_reg"
+        return self.getInstrDefName() + " sreg ',' sreg"
+
+    def addOperand(self, operand):
+        super().addOperand(operand)
+        if len(self.operands) == 1:
+            assert(isinstance(operand, Reg))
+            self.ssrc0 = operand.idx
+        elif len(self.operands) == 2:
+            assert(isinstance(operand, Reg))
+            self.ssrc1 = operand.idx
 
 class InstrSALU_SOPP(InstrSalu):
     def __init__(self, name=''):
@@ -948,6 +1058,7 @@ class InstrSMEM_SMRD(InstrSmem):
         super().__init__(name)
 
     class OpcodeEnum(Enum):
+        S_LOAD_DWORD                = 0x0
         S_LOAD_DWORDX2                = 0x1
         S_LOAD_DWORDX4                = 0x2
         S_LOAD_DWORDX8                = 0x3

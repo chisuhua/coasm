@@ -3,6 +3,7 @@
 # vim: ts=4 sw=4 sts=4 expandtab
 
 import sys
+import os
 from collections import OrderedDict
 from string import Template
 
@@ -764,7 +765,7 @@ int main() {
                 for instr in func.instrs:
                     instr.genInstrAsm(f)
             f.write("""
-    ofstream outFile("_asm.hex", ios::out | ios::binary);
+    ofstream outFile("gen_asm.hex", ios::out | ios::binary);
     for (uint32_t i ; i < code.size(); i++) {
         if (i % 8 == 0) printf("\\ndata:");
         printf("8%8x ", code[i]);
@@ -775,6 +776,17 @@ int main() {
     return 0;
 }
 """)
+
+def gen_asm():
+    ret = os.system("g++ gen_asm.c -o gen_asm")
+    if ret != 0:
+        print("g++ failed")
+        exit(1)
+    os.system("./gen_asm")
+    if ret != 0:
+        print("gen_asm failed")
+        exit(1)
+
 
 
 is_kernel_option = False;
@@ -832,5 +844,6 @@ if __name__ == '__main__':
             def_phase.memsize, \
             def_phase.unresolved_instr)
     walker.walk(ref_phase, tree)
+    gen_asm()
 
 

@@ -107,9 +107,9 @@ lop_imm
 
 
 instrvalu:
-		VALU_VOP2 generic_reg (',' generic_reg)? ',' alu_expr_list ('#' lop_imm)?
-         | VALU_VOP1 generic_reg ',' alu_expr_list
-         | VALU_VOPC generic_reg ',' alu_expr_list
+		VALU_VOP2 vreg (',' generic_reg)? ',' vreg ('#' lop_imm)?
+         | VALU_VOP1 vreg ',' generic_reg
+         | VALU_VOPC vreg ',' generic_reg
          | VALU_VOP3A generic_reg ',' generic_reg ',' generic_reg ',' alu_expr_list ('#' lop_imm)?;
 
 instrsalu:
@@ -355,7 +355,8 @@ SALU_SOPP:
          | S '_' P H I) E32?;
 
 SMEM_SMRD:
-		(S '_' L O A D '_' D W O R D X '2'
+		(S '_' L O A D '_' D W O R D
+         | S '_' L O A D '_' D W O R D X '2'
          | S '_' L O A D '_' D W O R D X '4'
          | S '_' L O A D '_' D W O R D X '8'
          | S '_' L O A D '_' D W O R D X '1' '6'
