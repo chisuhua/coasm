@@ -736,9 +736,6 @@ class RefPhase(CoasmListener):
         for instr in self.unresolved_instr:
             print("instr {} is unresolved".format(self.unresolved_instr))
 
-        with open("gen_def.h", 'w') as f:
-            Instr.visitClass(VisitType.GEN_INSTR_FMT_FIELD, f);
-
         with open("gen_asm.c", 'w') as f:
             #Instr.visitSubClass("opcode_enum")
             f.write("""
@@ -746,7 +743,7 @@ class RefPhase(CoasmListener):
 #include <fstream>
 #include <vector>
 #include <stdint.h>
-#include "gen_def.h"
+#include "opcodes_fmt.def"
 using namespace std;
 std::vector<uint32_t> code;
 
@@ -754,7 +751,9 @@ union Bytes {
     uint8_t bytes[8];
     uint32_t word[2];
 """)
-            Instr.visitClass(VisitType.GEN_INSTR_FMT_DEF, f);
+            fmt_list = Instr.getInstrFmtList()
+            instr_fmt = "\n".join(["Bytes{} {};".format(fmt, fmt) for fmt in fmt_list])
+            f.write(instr_fmt)
             f.write("""
 };
 

@@ -373,10 +373,11 @@ class InstrField:
 class VisitType(Enum):
     GRAMMAR_INSTR_FMT = 1
     GRAMMAR_INSTR_DEF = 2
-    GEN_INSTR_FMT_DEF = 3
+    GET_INSTR_FMT_LIST = 3
     GEN_INSTR_FMT_FIELD = 4
-    GEN_INSTR_OP_ENUM_DEF = 5
-    GEN_INSTR_DEF = 6
+    GEN_INSTR_OPCODE_DEF = 5
+    GEN_INSTR_OP_ENUM_DEF = 6
+    GEN_INSTR_DEF = 7
 
 
 class Instr:
@@ -461,9 +462,8 @@ class Instr:
         #print("GetInstrDef" + instr_def)
         return instr_def
 
-    def getCppFmtDef(self):
-        instr_encode = "\nBytes" + self.getFmtName() + " " + self.getFmtName() + ";"
-        return instr_encode
+    def getInstrFmtList(cls):
+        return [fmtcls.__name__.lower() for fmtcls in __class__.__subclasses__()]
 
     def getCppFieldEncode(self):
         instr_encode = "\nstruct Bytes" + self.getFmtName() +  " {\n" + \
@@ -502,17 +502,21 @@ class Instr:
             opcode_list[op.name] = hex(op.value)
         return opcode_list
 
+    def genInstrOpcodeDef(self, f):
+        opcode_list = self.getOpcodeEnumList()
+        for n, v in opcode_list:
+            #TODO
+            f.write("DEFINST({},{}, {}, {}, {}})".format(n, "", v, 4, 0))
+
     def genInstrDef(self, visit_type, f):
-        if visit_type == VisitType.GEN_INSTR_FMT_DEF:
-            f.write(self.getCppFmtDef())
-        elif visit_type == VisitType.GEN_INSTR_FMT_FIELD:
+        if visit_type == VisitType.GEN_INSTR_FMT_FIELD:
             f.write(self.getCppFieldEncode())
+        elif visit_type == VisitType.GET_INSTR_FMT_LIST:
+            return self.getInstrFmtList()
         elif visit_type == VisitType.GEN_INSTR_OP_ENUM_DEF:
             opcode_list = self.getOpcodeEnumList()
             for n, v in opcode_list:
                 f.write("{} = {}".format(n, v))
-        elif visit_type == VisitType.GEN_INSTR_DEF:
-            pass
 
     def __str__(self):
         if self.instr_str is not None:
@@ -526,11 +530,11 @@ class Instr:
         return instr_str
 
     @classmethod
-    def getInstrFmtList(cls):
+    def getGrammarInstrFmtList(cls):
         return " | ".join([subcls.__name__.lower() for subcls in __class__.__subclasses__()])
 
     @classmethod
-    def getInstrClassList(cls):
+    def getGrammarInstrClassList(cls):
         instr_class = []
         for subcls in __class__.__subclasses__():
             print("InInstrClass: {} visit {}".format(cls.__name__, subcls.__name__))
@@ -538,7 +542,7 @@ class Instr:
         return instr_class
 
     @classmethod
-    def getInstrDefList(cls):
+    def getGrammarInstrDefList(cls):
         instr_def = []
         for subcls in __class__.__subclasses__():
             print("InInstrDef: {} visit {}".format(cls.__name__, subcls.__name__))
@@ -556,18 +560,20 @@ class Instr:
     def visitSubClass(cls, visit_type, f):
         tmp = []
         for subcls in cls.__subclasses__():
-            sub = subcls()
+            subobj = subcls()
             if cls.__name__ == subcls.__name__:
                 continue
             print("InSubClass visit_type {}: {} visit {}".format(visit_type, cls.__name__, subcls.__name__))
             if visit_type == VisitType.GRAMMAR_INSTR_DEF:
-                tmp.append(sub.genGrammarInstrDef(f))
+                tmp.append(subobj.genGrammarInstrDef(f))
             elif visit_type == VisitType.GRAMMAR_INSTR_FMT:
-                tmp.append(sub.genGrammarInstrClass())
+                tmp.append(subobj.genGrammarInstrClass())
             else:
-                sub.genInstrDef(visit_type, f)
+                tmp.append(subobj.genInstrDef(visit_type, f))
         if visit_type == VisitType.GRAMMAR_INSTR_FMT:
             f.append({"name": cls.__name__.lower(), "value": "\n         | ".join(tmp)})
+        elif visit_type == VisitType.GET_INSTR_FMT_LIST:
+            f.append(tmp)
 
 
     def genGrammarInstrDef(self, f):
@@ -583,62 +589,21 @@ class InstrValu(Instr):
     def __init__(self, name=''):
         super().__init__(name)
 
-    #@classmethod
-    #def visitSubClass(cls, visit_type, f):
-    #    for subcls in __class__.__subclasses__():
-    #        sub = subcls()
-    #        print("{} visit {}".format(cls.__name__, subcls.__name__))
-    #        if visit_type == VisitType.GRAMMAR_INSTR_FMT:
-    #            sub.genInstrDef(visit_type, f)
-    #        elif visit_type == VisitType.GEN_INSTR_DEF:
-    #            sub.genInstrDef(visit_type, f)
-
-
 class InstrSalu(Instr):
     def __init__(self, name=''):
         super().__init__(name)
-
-    #@classmethod
-    #def visitSubClass(cls, visit_type, f):
-    #    for subcls in __class__.__subclasses__():
-    #        print("{} visit {}".format(cls.__name__, subcls.__name__))
-    #        sub = subcls()
-    #        sub.genInstrDef(visit_type, f)
 
 class InstrSmem(Instr):
     def __init__(self, name=''):
         super().__init__(name)
 
-    #@classmethod
-    #def visitSubClass(cls, visit_type, f):
-    #    for subcls in __class__.__subclasses__():
-    #        sub = subcls()
-    #        print("{} visit {}".format(cls.__name__, subcls.__name__))
-    #        sub.genInstrDef(visit_type, f)
-
-
 class InstrVmem(Instr):
     def __init__(self, name=''):
         super().__init__(name)
 
-    #@classmethod
-    #def visitSubClass(cls, visit_type, f):
-    #    for subcls in __class__.__subclasses__():
-    #        sub = subcls()
-    #        print("{} visit {}".format(cls.__name__, subcls.__name__))
-    #        sub.genInstrDef(visit_type, f)
-
 class InstrDmem(Instr):
     def __init__(self, name=''):
         super().__init__(name)
-
-    #@classmethod
-    #def visitSubClass(cls, visit_type, f):
-    #    for subcls in __class__.__subclasses__():
-    #        sub = subcls()
-    #        print("{} visit {}".format(cls.__name__, subcls.__name__))
-    #        sub.genInstrDef(visit_type, f)
-
 
 #------------------------------
 class InstrVALU_VOP2(InstrValu):
