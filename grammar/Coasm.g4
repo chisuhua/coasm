@@ -110,13 +110,13 @@ instrvalu:
 		VALU_VOP2 vreg (',' generic_reg)? ',' vreg ('#' lop_imm)?
          | VALU_VOP1 vreg ',' generic_reg
          | VALU_VOPC vreg ',' generic_reg
-         | VALU_VOP3A generic_reg ',' generic_reg ',' generic_reg ',' alu_expr_list ('#' lop_imm)?;
+         | VALU_VOP3 vreg ',' generic_reg ',' generic_reg ',' generic_reg;
 
 instrsalu:
-		SALU_SOP1 generic_reg ',' alu_expr_list ('#' lop_imm)
-         | SALU_SOP2 generic_reg ',' generic_reg ',' alu_expr_list ('#' lop_imm)?
-         | SALU_SOPK generic_reg ',' number
-         | SALU_SOPC generic_reg ',' generic_reg
+		SALU_SOP1 sreg ',' sreg
+         | SALU_SOP2 sreg ',' sreg ',' sreg
+         | SALU_SOPK sreg ',' number
+         | SALU_SOPC sreg ',' sreg
          | SALU_SOPP (number | wait_expr (',' wait_expr)*)?;
 
 instrsmem:
@@ -271,13 +271,13 @@ VALU_VOPC:
          | V '_' C M P '_' N E '_' U '3' '2'
          | V '_' C M P '_' G E '_' U '3' '2') E32?;
 
-VALU_VOP3A:
-		(V '_' C N D M A S K '_' B '3' '2' '_' V O P '3' A
-         | V '_' A D D '_' F '3' '2' '_' V O P '3' A
-         | V '_' S U B R E V '_' F '3' '2' '_' V O P '3' A
-         | V '_' M U L '_' F '3' '2' '_' V O P '3' A
-         | V '_' M U L '_' I '3' '2' '_' I '2' '4' '_' V O P '3' A
-         | V '_' M A X '_' F '3' '2' '_' V O P '3' A
+VALU_VOP3:
+		(V '_' C N D M A S K '_' B '3' '2' '_' V O P '3'
+         | V '_' A D D '_' F '3' '2' '_' V O P '3'
+         | V '_' S U B R E V '_' F '3' '2' '_' V O P '3'
+         | V '_' M U L '_' F '3' '2' '_' V O P '3'
+         | V '_' M U L '_' I '3' '2' '_' I '2' '4' '_' V O P '3'
+         | V '_' M A X '_' F '3' '2' '_' V O P '3'
          | V '_' M A D '_' F '3' '2'
          | V '_' M A D '_' U '3' '2' '_' U '2' '4'
          | V '_' B F E '_' U '3' '2'

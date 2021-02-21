@@ -10,6 +10,8 @@ from string import Template
 from antlr4 import *
 from antlr4.InputStream import InputStream
 from coasm import *
+import lief
+from lief import ELF
 import yaml
 
 from grammar.CoasmLexer import CoasmLexer
@@ -17,6 +19,8 @@ from grammar.CoasmParser import CoasmParser
 from grammar.CoasmListener import CoasmListener
 
 import struct
+code = []
+data = []
 
 def get_type(tokenType):
     if tokenType == CoasmParser.K_FLOAT:
@@ -194,7 +198,7 @@ class Function(FunctionSymbol):
         #self.graph = Graph()
         self.name = name
         self.labels = {}
-        self.instrs = OrderedDict()
+        self.instrs = [] #OrderedDict()
         self.visible = True
 
     def addLabel(self, label: LabelSymbol):
@@ -204,7 +208,7 @@ class Function(FunctionSymbol):
         self.labels[label.name].addInstr(instr)
 
     def addInstr(self, instr: Instr):
-        self.instrs[instr] = []
+        self.instrs.append(instr) #= []
 
     def setVisible(self, flag):
         self.visible = flag
@@ -473,22 +477,25 @@ class DefPhase(CoasmListener):
 
     def exitMem_directive(self, ctx:CoasmParser.Mem_directiveContext):
         cur_var = self.cur_var
-        if self.cur_kernel is not None:
-            if self.cur_section != ".kernel_arg":
-                error(ctx.ident(), "ERROR: should be defined in .kernel_arg")
-            ident = ctx.ident().getText()
-            arg = KernelArg(ident)
-            arg.offset = cur_var.offset
-            arg.size = cur_var.size
-            if cur_var.name.startswith("."):
-                error(ctx.ident(), "ERROR: hidden kernel arg at global mem space is not suppoted")
-            if cur_var.isPointer():
-                arg.kind = ArgSymbol.Kind.GLOBAL_PTR
-                arg.data_type = cur_var.data_type
-            else:
-                arg.kind = ArgSymbol.Kind.GLOBAL_VALUE
-                arg.data_type = cur_var.data_type
-            self.cur_kernel.addArg(arg)
+        if cur_var.size > 0:
+            data.append(bytes([0x0]*cur_var.size))
+        # TODO move to yaml meta
+        #if self.cur_kernel is not None:
+        #    if self.cur_section != ".kernel_arg":
+        #        error(ctx.ident(), "ERROR: should be defined in .kernel_arg")
+        #    ident = ctx.ident().getText()
+        #    arg = KernelArg(ident)
+        #    arg.offset = cur_var.offset
+        #    arg.size = cur_var.size
+        #    if cur_var.name.startswith("."):
+        #        error(ctx.ident(), "ERROR: hidden kernel arg at global mem space is not suppoted")
+        #    if cur_var.isPointer():
+        #        arg.kind = ArgSymbol.Kind.GLOBAL_PTR
+        #        arg.data_type = cur_var.data_type
+        #    else:
+        #        arg.kind = ArgSymbol.Kind.GLOBAL_VALUE
+        #        arg.data_type = cur_var.data_type
+        #    self.cur_kernel.addArg(arg)
         self.variables[cur_var.name] = cur_var
         self.memsize[cur_var.mem_space.name] = cur_var.offset + cur_var.size;
     def enterData_offset(self, ctx:CoasmParser.Data_offsetContext):
@@ -510,6 +517,10 @@ class DefPhase(CoasmListener):
         cur_var = self.cur_var
         if (cur_var.offset + cur_var.size) > MemSpace.getMaxSize(cur_var.mem_space):
             error(ctx, "ERROR: cant allocate {} since memory full".format(cur_var.name))
+
+        if cur_var.mem_space == MemSpace.KindEnum.GLOBAL:
+            assert(cur_var.offset > len(data))
+            data.append(bytes([0]*(cur_var.offset - len(data))))
 
 
     def enterNumber(self, ctx:CoasmParser.NumberContext):
@@ -736,55 +747,11 @@ class RefPhase(CoasmListener):
         for instr in self.unresolved_instr:
             print("instr {} is unresolved".format(self.unresolved_instr))
 
-        with open("gen_asm.c", 'w') as f:
-            #Instr.visitSubClass("opcode_enum")
-            f.write("""
-#include <iostream>
-#include <fstream>
-#include <vector>
-#include <stdint.h>
-#include "opcodes_fmt.def"
-using namespace std;
-std::vector<uint32_t> code;
-
-union Bytes {
-    uint8_t bytes[8];
-    uint32_t word[2];
-""")
-            fmt_list = Instr.getInstrFmtList()
-            instr_fmt = "\n".join(["Bytes{} {};".format(fmt, fmt) for fmt in fmt_list])
-            f.write(instr_fmt)
-            f.write("""
-};
-
-Bytes bytes;
-int main() {
-""")
-            for func_name, func in self.functions.items():
-                for instr in func.instrs:
-                    instr.genInstrAsm(f)
-            f.write("""
-    ofstream outFile("gen_asm.hex", ios::out | ios::binary);
-    for (uint32_t i ; i < code.size(); i++) {
-        if (i % 8 == 0) printf("\\ndata:");
-        printf("8%8x ", code[i]);
-        outFile.write((char*)&code[i], sizeof(uint32_t));
-    }
-    printf("\\n");
-    outFile.close();
-    return 0;
-}
-""")
-
-def gen_asm():
-    ret = os.system("g++ gen_asm.c -o gen_asm")
-    if ret != 0:
-        print("g++ failed")
-        exit(1)
-    os.system("./gen_asm")
-    if ret != 0:
-        print("gen_asm failed")
-        exit(1)
+        for func_name, func in self.functions.items():
+            for instr in func.instrs:
+                instr_code = instr.genInstrAsm()
+                for i in range(0, len(instr_code)):
+                    code.append(instr_code[i])
 
 
 
@@ -794,7 +761,10 @@ is_kernel_meta = False;
 if __name__ == '__main__':
     asm_input = []
     metas = []
-    with open(sys.argv[1], 'r') as f:
+    input_file = sys.argv[1]
+    file_name = os.path.splitext(os.path.basename(input_file))[0]
+    output_file = file_name + ".o"
+    with open(input_file, 'r') as f:
         lines = f.readlines()
 
     for line in lines:
@@ -814,7 +784,7 @@ if __name__ == '__main__':
             asm_input.append(line)
 
     kernel_meta = yaml.load("".join(metas))
-    print(kernel_meta)
+    #print(kernel_meta)
     input_stream = InputStream("".join(asm_input))
 
     lexer = CoasmLexer(input_stream)
@@ -843,6 +813,89 @@ if __name__ == '__main__':
             def_phase.memsize, \
             def_phase.unresolved_instr)
     walker.walk(ref_phase, tree)
-    gen_asm()
+
+    binary = lief.ELF.Binary("ELF_from_scratch", lief.ELF.ELF_CLASS(1))
+    #binary = lief.parse("elfdummy.o")
+
+    header = binary.header
+
+    header.identity[0] = 0x7f
+    header.identity[1] = 'E'
+    header.identity[2] = 'L'
+    header.identity[3] = 'F'
+    header.identity_class = ELF.ELF_CLASS.CLASS64
+    header.identity_data = ELF.ELF_DATA.MSB
+    header.identity_version = ELF.VERSION.CURRENT
+    header.identity_os_abi = ELF.OS_ABI.GNU
+    header.machine_type = ELF.ARCH.ARM
+    header.file_type = ELF.E_TYPE.DYNAMIC
+
+    header.header_size = 64
+    header.section_header_size = 64
+    header.program_header_size = 56
+    header.numberof_sections = 6
+    header.numberof_segments = 4
+
+    text_segment             = ELF.Segment()
+
+    text_section             = ELF.Section()
+    pdb.set_trace()
+    text_section = binary.add(text_segment)
+    text_section = binary.add(text_section, loaded=False)
+
+    text_section.name        = ".text"
+    text_section.type        = ELF.SECTION_TYPES.PROGBITS
+    #text_section.type        = ELF.SECTION_TYPES.SYMTAB
+    text_section.entry_size  = 0x18
+    text_section.alignment   = 16
+    #text_section.link        = len(binary.sections) + 1
+    #text_section.content     = [0] * 100
+    #text_section.content     = code
+
+
+    text_sec = lief.ELF.Section(".text")
+    #text_sec = binary.get_section(".text")
+    text_sec.size = len(code)
+    text_sec.content = code
+
+    text_sec = binary.add(text_sec)
+
+    data_sec = lief.ELF.Section(".text")
+    #data_sec = binary.get_section(".data")
+    data_sec.size = len(data)
+    data_sec.content = data
+
+    symtab_section             = ELF.Section()
+    symtab_section.name        = ""
+    symtab_section.type        = ELF.SECTION_TYPES.SYMTAB
+    symtab_section.entry_size  = 0x18
+    symtab_section.alignment   = 8
+    symtab_section.link        = len(binary.sections) + 1
+    symtab_section.content     = [0] * 100
+
+    symstr_section            = ELF.Section()
+    symstr_section.name       = ""
+    symstr_section.type       = ELF.SECTION_TYPES.STRTAB
+    symstr_section.entry_size = 1
+    symstr_section.alignment  = 1
+    symstr_section.content    = [0] * 100
+
+    symtab_section = binary.add(symtab_section, loaded=False)
+    symstr_section = binary.add(symstr_section, loaded=False)
+
+
+    #for k in ref_phase.kernels:
+
+    #header = binary.header
+    #header.entrypoint = 0x123
+    #header.machine_type = ELF.ARCH.x86_64
+    binary.write(output_file)
+
+    pdb.set_trace()
+    #binary.add(section_text)
+    #binary.add(section_data)
+
+    #print(section_text)
+    #print(section_data)
 
 

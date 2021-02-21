@@ -2,6 +2,7 @@ from enum import Enum
 from collections import OrderedDict
 from collections import namedtuple
 from jinja2 import Template
+from ctypes import *
 import pdb
 
 MAX_SREG_NUM = 255
@@ -380,7 +381,8 @@ class VisitType(Enum):
     GEN_INSTR_DEF = 7
 
 
-class Instr:
+class Instr(Structure):
+    _pack_ = 1
     FmtEnc = namedtuple('FmtEnc', ['bit_start', 'width', 'value'])
     fmt_enc = {}
     fmt_enc["VOP2"] = FmtEnc(31, 1, 0b0)
@@ -401,7 +403,7 @@ class Instr:
         #super().__init__(name)
         self.opcode = None
         #self.has_imm = False
-        self.imm = None
+        #self.imm = None
         self.lop_imm = None
         self.stride_imm = 0
         self.branch_cond = 0
@@ -418,9 +420,10 @@ class Instr:
         self.name = name       # in fact it is line number
         self.instr_str = None
         self.func_name = None
-        if hasattr(self, "field"):
-            for n,v in self.field.items():
-                setattr(self, n, 0)
+        self.instr_size = sizeof(self)
+        #if hasattr(self, "field"):
+        #    for n,v in self.field.items():
+        #        setattr(self, n, 0)
         print("[instr create info] create instr with op {}".format(name))
         if name == "":
             print("Warn:create instr without correct op enum")
@@ -462,27 +465,16 @@ class Instr:
         #print("GetInstrDef" + instr_def)
         return instr_def
 
-    def getInstrFmtList(cls):
-        return [fmtcls.__name__.lower() for fmtcls in __class__.__subclasses__()]
+    def getInstrFmtList(self):
+        #return [fmtcls.__name__.lower() for fmtcls [k() for k in __class__.__subclasses__()]]
+        _, fmt = self.__class__.__name__.split('_')
+        instr = self.__class__.__name__
+        return instr, fmt
 
     def getCppFieldEncode(self):
         instr_encode = "\nstruct Bytes" + self.getFmtName() +  " {\n" + \
-        "\n".join(["uint32_t {} : {};".format(n, v) for n,v in self.field.items()]) + "};"
+        "\n".join(["uint32_t {} : {};".format(n[0], n[-1]) for n in self._fields_]) + "};"
         return instr_encode
-
-    def getCppInstrAsm(self):
-        bit_count = 0
-        instr = "bytes." + self.getFmtName() + "= {"
-        value = []
-        for n,v in self.field.items():
-            bit_count += v
-            value.append(str(getattr(self, n)))
-        instr += ','.join(value)
-        instr += "};"
-        instr += "code.push_back(bytes.word[0]);"
-        if bit_count > 32:
-            instr += "code.push_back(bytes.word[1]);"
-        return instr
 
     def getFlag(self, name):
         if name in flags:
@@ -493,8 +485,8 @@ class Instr:
     def getInputDataType(self):
         pass
 
-    def genInstrAsm(self, f):
-        f.write("{}\n".format(self.getCppInstrAsm()))
+    def genInstrAsm(self):
+        return string_at(addressof(self), self.instr_size)
 
     def getOpcodeEnumList(self):
         opcode_list = OrderedDict()
@@ -504,9 +496,9 @@ class Instr:
 
     def genInstrOpcodeDef(self, f):
         opcode_list = self.getOpcodeEnumList()
-        for n, v in opcode_list:
+        for n, v in opcode_list.items():
             #TODO
-            f.write("DEFINST({},{}, {}, {}, {}})".format(n, "", v, 4, 0))
+            f.write("DEFINST({},{}, {}, {}, {})\n".format(n, '" "', v, 4, 0))
 
     def genInstrDef(self, visit_type, f):
         if visit_type == VisitType.GEN_INSTR_FMT_FIELD:
@@ -573,7 +565,7 @@ class Instr:
         if visit_type == VisitType.GRAMMAR_INSTR_FMT:
             f.append({"name": cls.__name__.lower(), "value": "\n         | ".join(tmp)})
         elif visit_type == VisitType.GET_INSTR_FMT_LIST:
-            f.append(tmp)
+            f += tmp
 
 
     def genGrammarInstrDef(self, f):
@@ -607,15 +599,15 @@ class InstrDmem(Instr):
 
 #------------------------------
 class InstrVALU_VOP2(InstrValu):
+    _fields_ = [("src0", c_int, 8),
+                ("ssrc0_", c_int, 1),
+                ("vsrc1", c_int, 8),
+                ("vdst", c_int, 8),
+                ("op", c_int, 6),
+                ("enc", c_int, 1),
+                ("lit_const", c_int, 32)]
+
     def __init__(self, name=''):
-        self.field = OrderedDict()
-        self.field["src0"]  = 8
-        self.field["ssrc0_"]= 1
-        self.field["vsrc1"] = 8
-        self.field["vdst"]  = 8
-        self.field["op"]    = 6
-        self.field["enc"]        = 1
-        self.field["lit_const"]  = 32
         super().__init__(name)
 
     class OpcodeEnum(Enum):
@@ -669,14 +661,14 @@ class InstrVALU_VOP2(InstrValu):
 
 
 class InstrVALU_VOP1(InstrValu):
+    _fields_ = [("src0", c_int, 8),
+                ("ssrc0_", c_int, 1),
+                ("op", c_int, 8),
+                ("vdst", c_int, 8),
+                ("enc", c_int, 7),
+                ("lit_const", c_int, 32)]
+
     def __init__(self, name=''):
-        self.field = OrderedDict()
-        self.field["src0"]  = 8
-        self.field["ssrc0_"]  = 1
-        self.field["op"]    = 8
-        self.field["vdst"]  = 8
-        self.field["enc"]         = 7
-        self.field["lit_const"]   = 32
         super().__init__(name)
 
     class OpcodeEnum(Enum):
@@ -725,14 +717,14 @@ class InstrVALU_VOP1(InstrValu):
 
 
 class InstrVALU_VOPC(InstrValu):
+    _fields_ = [("src0", c_int, 8),
+                ("ssrc0_", c_int, 1),
+                ("vsrc1", c_int, 8),
+                ("op", c_int, 8),
+                ("enc", c_int, 7),
+                ("lit_const", c_int, 32)]
+
     def __init__(self, name=''):
-        self.field = OrderedDict()
-        self.field["src0"]  = 8
-        self.field["ssrc0_"] = 1
-        self.field["vsrc1"]  = 8
-        self.field["op"]    = 8
-        self.field["enc"]         = 7
-        self.field["lit_const"]   = 32
         super().__init__(name)
 
     class OpcodeEnum(Enum):
@@ -779,19 +771,19 @@ class InstrVALU_VOPC(InstrValu):
                 self.ssrc0_ = 0
 
 class InstrVALU_VOP3(InstrValu):
+    _fields_ = [("vdst", c_int, 8),
+                ("abs", c_int, 3),
+                ("clamp", c_int, 1),
+                ("reserved", c_int, 5),
+                ("op", c_int, 9),
+                ("enc", c_int, 6),
+                ("src0", c_int, 9),
+                ("src1", c_int, 9),
+                ("src2", c_int, 9),
+                ("omod", c_int, 2),
+                ("neg", c_int, 3)]
+
     def __init__(self, name=''):
-        self.field = OrderedDict()
-        self.field["vdst"]      = 8
-        self.field["abs"]       = 3
-        self.field["clamp"]     = 1
-        self.field["reserved"]  = 5
-        self.field["op"]        = 9
-        self.field["enc"]       = 6
-        self.field["src0"]      = 9
-        self.field["src1"]      = 9
-        self.field["src2"]      = 9
-        self.field["omod"]      = 2
-        self.field["neg"]       = 3
         super().__init__(name)
 
     class OpcodeEnum(Enum):
@@ -849,13 +841,14 @@ class InstrVALU_VOP3(InstrValu):
 
  #------------------------------
 class InstrSALU_SOP1(InstrSalu):
+    _fields_ = [("ssrc0", c_int, 8),
+                ("op", c_int, 8),
+                ("sdst", c_int, 7),
+                ("enc", c_int, 9),
+                ("lit_const", c_int, 32)]
+
+
     def __init__(self, name=''):
-        self.field = OrderedDict()
-        self.field["ssrc0"] = 8
-        self.field["op"] = 8
-        self.field["sdst"] = 7
-        self.field["enc"] = 9
-        self.field["lit_const"] = 32
         super().__init__(name)
 
     class OpcodeEnum(Enum):
@@ -879,14 +872,14 @@ class InstrSALU_SOP1(InstrSalu):
             self.ssrc0 = operand.idx
 
 class InstrSALU_SOP2(InstrSalu):
+    _fields_ = [("ssrc0", c_int, 8),
+                ("ssrc1", c_int, 8),
+                ("sdst", c_int, 7),
+                ("op", c_int, 7),
+                ("enc", c_int, 2),
+                ("lit_const", c_int, 32)]
+
     def __init__(self, name=''):
-        self.field = OrderedDict()
-        self.field["ssrc0"] = 8
-        self.field["ssrc1"] = 8
-        self.field["sdst"] = 7
-        self.field["op"] = 7
-        self.field["enc"] = 2
-        self.field["lit_const"] = 32
         super().__init__(name)
 
     class OpcodeEnum(Enum):
@@ -928,12 +921,12 @@ class InstrSALU_SOP2(InstrSalu):
 
 
 class InstrSALU_SOPK(InstrSalu):
+    _fields_ = [("simm16", c_int, 16),
+                ("sdst", c_int, 7),
+                ("op", c_int, 5),
+                ("enc", c_int, 4)]
+
     def __init__(self, name=''):
-        self.field = OrderedDict()
-        self.field["simm16"] = 16
-        self.field["sdst"] = 7
-        self.field["op"] = 5
-        self.field["enc"] = 4
         super().__init__(name)
 
     class OpcodeEnum(Enum):
@@ -956,13 +949,14 @@ class InstrSALU_SOPK(InstrSalu):
 
 
 class InstrSALU_SOPC(InstrSalu):
+    _fields_ = [("ssrc0", c_int, 8),
+                ("ssrc1", c_int, 8),
+                ("op", c_int, 7),
+                ("enc", c_int, 9),
+                ("lit_const", c_int)]
+
+
     def __init__(self, name=''):
-        self.field = OrderedDict()
-        self.field["ssrc0"] = 8
-        self.field["ssrc1"] = 8
-        self.field["op"] = 7
-        self.field["enc"] = 9
-        self.field["li_const"] = 32
         super().__init__(name)
 
     class OpcodeEnum(Enum):
@@ -988,11 +982,12 @@ class InstrSALU_SOPC(InstrSalu):
             self.ssrc1 = operand.idx
 
 class InstrSALU_SOPP(InstrSalu):
+    _fields_ = [("simm16", c_int, 16),
+                ("op", c_int, 7),
+                ("enc", c_int, 9)]
+
+
     def __init__(self, name=''):
-        self.field = OrderedDict()
-        self.field["simm16"] = 16
-        self.field["op"] = 7
-        self.field["enc"] = 9
         super().__init__(name)
 
     class OpcodeEnum(Enum):
@@ -1012,14 +1007,15 @@ class InstrSALU_SOPP(InstrSalu):
         return self.getInstrDefName() + " (number | wait_expr (',' wait_expr)*)?"
 
 class InstrSMEM_SMRD(InstrSmem):
+    _fields_ = [("offset", c_int, 8),
+                ("imm", c_int, 1),
+                ("sbase", c_int, 6),
+                ("sdst", c_int, 7),
+                ("op", c_int, 5),
+                ("enc", c_int, 5)]
+
+
     def __init__(self, name=''):
-        self.field = OrderedDict()
-        self.field["offset"] = 8
-        self.field["imm"]    = 1
-        self.field["sbase"]  = 6
-        self.field["sdst"]   = 7
-        self.field["op"]  = 5
-        self.field["enc"]  = 5
         super().__init__(name)
 
     class OpcodeEnum(Enum):
@@ -1054,19 +1050,19 @@ class InstrSMEM_SMRD(InstrSmem):
                 self.imm = 1
 
 class InstrDMEM_DS(InstrDmem):
+    _fields_ = [("offset0", c_int, 8),
+                ("offset1", c_int, 8),
+                ("reserved", c_int, 1),
+                ("gds", c_int, 1),
+                ("op", c_int, 8),
+                ("enc", c_int, 6),
+                ("addr", c_int, 8),
+                ("data0", c_int, 8),
+                ("data1", c_int, 8),
+                ("vdst", c_int, 8)]
+
     def __init__(self, name=''):
-        self.field = OrderedDict()
-        self.field["offset0"] = 8
-        self.field["offset1"] = 8
-        self.field["reserved"] = 1
-        self.field["gds"]    = 1
-        self.field["op"]    = 8
-        self.field["enc"]   = 6
-        self.field["addr"]  = 8
-        self.field["data0"]  = 8
-        self.field["data1"]  = 8
-        self.field["vdst"]  = 8
-        super().__init__(name)
+       super().__init__(name)
 
     class OpcodeEnum(Enum):
         DS_ADD_U32                = 0x1
@@ -1086,26 +1082,27 @@ class InstrDMEM_DS(InstrDmem):
         return self.getInstrDefName() + " (vreg | ident | mem_expr_list) ',' mem_expr_list"
 
 class InstrVMEM_MUBUF(InstrVmem):
+    _fields_ = [("offset", c_int, 12),
+                ("offen",  c_int, 1),
+                ("idxen",  c_int, 1),
+                ("glc",    c_int, 1),
+                ("addr64", c_int, 1),
+                ("lds",    c_int, 1),
+                ("reserved0", c_int, 1),
+                ("op",     c_int, 7),
+                ("reserved1", c_int, 1),
+                ("enc",    c_int, 6),
+                ("vaddr", c_int, 8),
+                ("vdata", c_int, 8),
+                ("srsrc", c_int, 5),
+                ("reserved2", c_int, 1),
+                ("slc",   c_int, 1),
+                ("tfe",   c_int, 1),
+                ("soffset", c_int, 8)]
+
+
     def __init__(self, name=''):
-        self.field = OrderedDict()
-        self.field["offset"]     = 12
-        self.field["offen"]      = 1
-        self.field["idxen"]      = 1
-        self.field["glc"]        = 1
-        self.field["addr64"]     = 1
-        self.field["lds"]        = 1
-        self.field["reserved0"]  = 1
-        self.field["op"]         = 7
-        self.field["reserved1"]  = 1
-        self.field["enc"]        = 6
-        self.field["vaddr"]      = 8
-        self.field["vdata"]      = 8
-        self.field["srsrc"]      = 5
-        self.field["reserved2"]  = 1
-        self.field["slc"]        = 1
-        self.field["tfe"]        = 1
-        self.field["soffet"]     = 8
-        super().__init__(name)
+       super().__init__(name)
 
     class OpcodeEnum(Enum):
         BUFFER_LOAD_SBYTE                = 0x1
@@ -1119,25 +1116,26 @@ class InstrVMEM_MUBUF(InstrVmem):
         return self.getInstrDefName() + " vreg ',' vreg ',' sreg ',' sreg"
 
 class InstrVMEM_FLAT(InstrVmem):
+    _fields_ = [("offset", c_int, 12),
+                ("offen",  c_int, 1),
+                ("idxen",  c_int, 1),
+                ("glc",    c_int, 1),
+                ("addr64", c_int, 1),
+                ("lds",    c_int, 1),
+                ("reserved0", c_int, 1),
+                ("op",     c_int, 7),
+                ("reserved1", c_int, 1),
+                ("enc",    c_int, 6),
+                ("vaddr", c_int, 8),
+                ("vdata", c_int, 8),
+                ("srsrc", c_int, 5),
+                ("reserved2", c_int, 1),
+                ("slc",   c_int, 1),
+                ("tfe",   c_int, 1),
+                ("soffset", c_int, 8)]
+
+
     def __init__(self, name=''):
-        self.field = OrderedDict()
-        self.field["offset"]     = 12
-        self.field["offen"]      = 1
-        self.field["idxen"]      = 1
-        self.field["glc"]        = 1
-        self.field["addr64"]     = 1
-        self.field["lds"]        = 1
-        self.field["reserved0"]  = 1
-        self.field["op"]         = 7
-        self.field["reserved1"]  = 1
-        self.field["enc"]        = 6
-        self.field["vaddr"]      = 8
-        self.field["vdata"]      = 8
-        self.field["srsrc"]      = 5
-        self.field["reserved2"]  = 1
-        self.field["slc"]        = 1
-        self.field["tfe"]        = 1
-        self.field["soffet"]     = 8
         super().__init__(name)
 
     class OpcodeEnum(Enum):

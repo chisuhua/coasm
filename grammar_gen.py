@@ -35,11 +35,10 @@ with open("opcodes_fmt.def", 'w') as f:
 fmt_list = []
 Instr.visitClass(VisitType.GET_INSTR_FMT_LIST, fmt_list)
 with open("opcodes.def", 'w') as f:
-    for fmt in fmt_list:
-        Instr = exec("Instr{}()".format(fmt))
-        fmt_name = Instr.getFmtName()
-        f.write("DEFFMT({},{},{})".format(fmt_name, "", Instr.fmt_enc[fmt_name].value))
-        Instr.genInstrOpcodeDef(f);
-        f.write("DEFEND({})".format(fmt_name))
+    for instr_name, fmt in fmt_list:
+        exec("instr = {}()".format(instr_name))
+        f.write("DEFFMT({},{},{})\n".format(fmt, '" "', Instr.fmt_enc[fmt].value))
+        instr.genInstrOpcodeDef(f);
+        f.write("DEFEND({})\n\n".format(fmt))
 
 
