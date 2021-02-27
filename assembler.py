@@ -13,6 +13,7 @@ from coasm import *
 import lief
 from lief import ELF
 import yaml
+import msgpack
 
 from grammar.CoasmLexer import CoasmLexer
 from grammar.CoasmParser import CoasmParser
@@ -200,6 +201,8 @@ class Function(FunctionSymbol):
         self.labels = {}
         self.instrs = [] #OrderedDict()
         self.visible = True
+        self.code_pos = 0
+        self.code_size = 0
 
     def addLabel(self, label: LabelSymbol):
         self.labels[label.name] = label
@@ -748,10 +751,12 @@ class RefPhase(CoasmListener):
             print("instr {} is unresolved".format(self.unresolved_instr))
 
         for func_name, func in self.functions.items():
+            func.code_pos = len(code)
             for instr in func.instrs:
                 instr_code = instr.genInstrAsm()
                 for i in range(0, len(instr_code)):
                     code.append(instr_code[i])
+            func.code_size = len(code) - func.code_pos
 
 
 
@@ -784,7 +789,6 @@ if __name__ == '__main__':
             asm_input.append(line)
 
     kernel_meta = yaml.load("".join(metas))
-    #print(kernel_meta)
     input_stream = InputStream("".join(asm_input))
 
     lexer = CoasmLexer(input_stream)
@@ -814,88 +818,70 @@ if __name__ == '__main__':
             def_phase.unresolved_instr)
     walker.walk(ref_phase, tree)
 
-    binary = lief.ELF.Binary("ELF_from_scratch", lief.ELF.ELF_CLASS(1))
-    #binary = lief.parse("elfdummy.o")
-
+    binary = lief.parse("hello_elf.bin")
     header = binary.header
 
-    header.identity[0] = 0x7f
-    header.identity[1] = 'E'
-    header.identity[2] = 'L'
-    header.identity[3] = 'F'
-    header.identity_class = ELF.ELF_CLASS.CLASS64
-    header.identity_data = ELF.ELF_DATA.MSB
-    header.identity_version = ELF.VERSION.CURRENT
-    header.identity_os_abi = ELF.OS_ABI.GNU
-    header.machine_type = ELF.ARCH.ARM
-    header.file_type = ELF.E_TYPE.DYNAMIC
+    #header.identity_class = ELF.ELF_CLASS.CLASS64
+    #header.identity_data = ELF.ELF_DATA.MSB
+    #header.identity_version = ELF.VERSION.CURRENT
+    #header.identity_os_abi = ELF.OS_ABI.GNU
+    #header.machine_type = ELF.ARCH.ARM
+    #header.file_type = ELF.E_TYPE.DYNAMIC
 
-    header.header_size = 64
-    header.section_header_size = 64
-    header.program_header_size = 56
-    header.numberof_sections = 6
-    header.numberof_segments = 4
 
-    text_segment             = ELF.Segment()
+    text_section = binary.get_section(".text")
+    #text_section.name_idx = 4
 
-    text_section             = ELF.Section()
-    pdb.set_trace()
-    text_section = binary.add(text_segment)
-    text_section = binary.add(text_section, loaded=False)
-
-    text_section.name        = ".text"
-    text_section.type        = ELF.SECTION_TYPES.PROGBITS
-    #text_section.type        = ELF.SECTION_TYPES.SYMTAB
-    text_section.entry_size  = 0x18
-    text_section.alignment   = 16
+    #text_section.entry_size  = 0x18
+    #text_section.alignment   = 16
     #text_section.link        = len(binary.sections) + 1
     #text_section.content     = [0] * 100
-    #text_section.content     = code
+    text_section.size = len(code)
+    text_section.content     = code
+
+    data_section = binary.get_section(".data")
+    #data_sec.size = len(data)
+    #data_sec.content = data
+
+    symtab = {}
 
 
-    text_sec = lief.ELF.Section(".text")
-    #text_sec = binary.get_section(".text")
-    text_sec.size = len(code)
-    text_sec.content = code
+    for name,kernel in ref_phase.kernels.items():
+        func = ref_phase.functions[name]
+        sym = ELF.Symbol()
+        sym.name    = name
+        sym.type    = ELF.SYMBOL_TYPES.FUNC
+        sym.binding = ELF.SYMBOL_BINDINGS.LOCAL
+        sym.shndx   = 4 #text_section.name_idx
+        sym.value   = text_section.virtual_address + func.code_pos
+        sym.size    = func.code_size
+        symtab[name] = sym
+        binary.add_static_symbol(sym)
 
-    text_sec = binary.add(text_sec)
+    for k in kernel_meta["amdhsa.kernels"]:
+        kname = k['.name']
+        if kname in symtab:
+            sym = symtab[kname]
+            sym = ELF.Symbol()
+            sym.name    = k['.symbol']
+            #sym.type    = ELF.SYMBOL_TYPES.LOOS
+            sym.type    = ELF.SYMBOL_TYPES.FUNC
+            sym.binding = ELF.SYMBOL_BINDINGS.GLOBAL
+            sym.shndx   = symtab[kname].shndx
+            sym.value   = symtab[kname].value
+            sym.size    = symtab[kname].size
+            binary.add_static_symbol(sym)
 
-    data_sec = lief.ELF.Section(".text")
-    #data_sec = binary.get_section(".data")
-    data_sec.size = len(data)
-    data_sec.content = data
+    note_section = ELF.Section(".note")
+    note_section.type = ELF.SECTION_TYPES.NOTE
+    note_meta = msgpack.packb(kernel_meta, use_bin_type=True)
+    note_meta = [c for c in note_meta]
+    #.split() #string_at(addressof(note_meta))
+    note_section.content = note_meta
+    note_section.size = len(note_meta)
 
-    symtab_section             = ELF.Section()
-    symtab_section.name        = ""
-    symtab_section.type        = ELF.SECTION_TYPES.SYMTAB
-    symtab_section.entry_size  = 0x18
-    symtab_section.alignment   = 8
-    symtab_section.link        = len(binary.sections) + 1
-    symtab_section.content     = [0] * 100
+    note_section = binary.add(note_section)
 
-    symstr_section            = ELF.Section()
-    symstr_section.name       = ""
-    symstr_section.type       = ELF.SECTION_TYPES.STRTAB
-    symstr_section.entry_size = 1
-    symstr_section.alignment  = 1
-    symstr_section.content    = [0] * 100
-
-    symtab_section = binary.add(symtab_section, loaded=False)
-    symstr_section = binary.add(symstr_section, loaded=False)
-
-
-    #for k in ref_phase.kernels:
-
-    #header = binary.header
-    #header.entrypoint = 0x123
-    #header.machine_type = ELF.ARCH.x86_64
     binary.write(output_file)
-
-    pdb.set_trace()
-    #binary.add(section_text)
-    #binary.add(section_data)
-
-    #print(section_text)
-    #print(section_data)
 
 
