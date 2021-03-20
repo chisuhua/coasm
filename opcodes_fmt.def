@@ -1,117 +1,185 @@
 
 struct BytesVOP2 {
-uint32_t src0 : 8;
-uint32_t ssrc0_ : 1;
-uint32_t vsrc1 : 8;
-uint32_t vdst : 8;
-uint32_t op : 6;
-uint32_t enc : 1;
-uint32_t lit_const : 32;};
+    uint32_t src0 : 8;
+    uint32_t ssrc0_ : 1;
+    uint32_t vsrc1 : 8;
+    uint32_t vdst : 8;
+    uint32_t op : 6;
+    uint32_t enc : 1;
+    uint32_t lit_const : 32;
+};
+void printVOP2(BytesVOP2 bytes) {
+printf("src0 %x ,ssrc0_ %x ,vsrc1 %x ,vdst %x ,op %x ,enc %x ,lit_const %x \n", bytes.src0,bytes.ssrc0_,bytes.vsrc1,bytes.vdst,bytes.op,bytes.enc,bytes.lit_const);
+};
+
 struct BytesVOP1 {
-uint32_t src0 : 8;
-uint32_t ssrc0_ : 1;
-uint32_t op : 8;
-uint32_t vdst : 8;
-uint32_t enc : 7;
-uint32_t lit_const : 32;};
+    uint32_t src0 : 8;
+    uint32_t ssrc0_ : 1;
+    uint32_t op : 8;
+    uint32_t vdst : 8;
+    uint32_t enc : 7;
+    uint32_t lit_const : 32;
+};
+void printVOP1(BytesVOP1 bytes) {
+printf("src0 %x ,ssrc0_ %x ,op %x ,vdst %x ,enc %x ,lit_const %x \n", bytes.src0,bytes.ssrc0_,bytes.op,bytes.vdst,bytes.enc,bytes.lit_const);
+};
+
 struct BytesVOPC {
-uint32_t src0 : 8;
-uint32_t ssrc0_ : 1;
-uint32_t vsrc1 : 8;
-uint32_t op : 8;
-uint32_t enc : 7;
-uint32_t lit_const : 32;};
-struct BytesVOP3 {
-uint32_t vdst : 8;
-uint32_t abs : 3;
-uint32_t clamp : 1;
-uint32_t reserved : 5;
-uint32_t op : 9;
-uint32_t enc : 6;
-uint32_t src0 : 9;
-uint32_t src1 : 9;
-uint32_t src2 : 9;
-uint32_t omod : 2;
-uint32_t neg : 3;};
+    uint32_t src0 : 8;
+    uint32_t ssrc0_ : 1;
+    uint32_t vsrc1 : 8;
+    uint32_t op : 8;
+    uint32_t enc : 7;
+    uint32_t lit_const : 32;
+};
+void printVOPC(BytesVOPC bytes) {
+printf("src0 %x ,ssrc0_ %x ,vsrc1 %x ,op %x ,enc %x ,lit_const %x \n", bytes.src0,bytes.ssrc0_,bytes.vsrc1,bytes.op,bytes.enc,bytes.lit_const);
+};
+
+struct BytesVOP3A {
+    uint32_t vdst : 8;
+    uint32_t abs : 3;
+    uint32_t clamp : 1;
+    uint32_t reserved : 5;
+    uint32_t op : 9;
+    uint32_t enc : 6;
+    uint32_t src0 : 9;
+    uint32_t src1 : 9;
+    uint32_t src2 : 9;
+    uint32_t omod : 2;
+    uint32_t neg : 3;
+};
+void printVOP3A(BytesVOP3A bytes) {
+printf("vdst %x ,abs %x ,clamp %x ,reserved %x ,op %x ,enc %x ,src0 %x ,src1 %x ,src2 %x ,omod %x ,neg %x \n", bytes.vdst,bytes.abs,bytes.clamp,bytes.reserved,bytes.op,bytes.enc,bytes.src0,bytes.src1,bytes.src2,bytes.omod,bytes.neg);
+};
+
+struct BytesVOP3B {
+    uint32_t vdst : 8;
+    uint32_t sdst : 7;
+    uint32_t src0 : 9;
+    uint32_t op : 2;
+    uint32_t enc : 6;
+    uint32_t vsrc1 : 8;
+    uint32_t ssrc2 : 8;
+    uint32_t lit_const : 16;
+};
+void printVOP3B(BytesVOP3B bytes) {
+printf("vdst %x ,sdst %x ,src0 %x ,op %x ,enc %x ,vsrc1 %x ,ssrc2 %x ,lit_const %x \n", bytes.vdst,bytes.sdst,bytes.src0,bytes.op,bytes.enc,bytes.vsrc1,bytes.ssrc2,bytes.lit_const);
+};
+
 struct BytesSOP1 {
-uint32_t ssrc0 : 8;
-uint32_t op : 8;
-uint32_t sdst : 7;
-uint32_t enc : 9;
-uint32_t lit_const : 32;};
+    uint32_t ssrc0 : 8;
+    uint32_t op : 8;
+    uint32_t sdst : 7;
+    uint32_t enc : 9;
+    uint32_t lit_const : 32;
+};
+void printSOP1(BytesSOP1 bytes) {
+printf("ssrc0 %x ,op %x ,sdst %x ,enc %x ,lit_const %x \n", bytes.ssrc0,bytes.op,bytes.sdst,bytes.enc,bytes.lit_const);
+};
+
 struct BytesSOP2 {
-uint32_t ssrc0 : 8;
-uint32_t ssrc1 : 8;
-uint32_t sdst : 7;
-uint32_t op : 7;
-uint32_t enc : 2;
-uint32_t lit_const : 32;};
+    uint32_t ssrc0 : 8;
+    uint32_t ssrc1 : 8;
+    uint32_t sdst : 7;
+    uint32_t op : 7;
+    uint32_t enc : 2;
+    uint32_t lit_const : 32;
+};
+void printSOP2(BytesSOP2 bytes) {
+printf("ssrc0 %x ,ssrc1 %x ,sdst %x ,op %x ,enc %x ,lit_const %x \n", bytes.ssrc0,bytes.ssrc1,bytes.sdst,bytes.op,bytes.enc,bytes.lit_const);
+};
+
 struct BytesSOPK {
-uint32_t simm16 : 16;
-uint32_t sdst : 7;
-uint32_t op : 5;
-uint32_t enc : 4;};
+    uint32_t simm16 : 16;
+    uint32_t sdst : 7;
+    uint32_t op : 5;
+    uint32_t enc : 4;
+};
+void printSOPK(BytesSOPK bytes) {
+printf("simm16 %x ,sdst %x ,op %x ,enc %x \n", bytes.simm16,bytes.sdst,bytes.op,bytes.enc);
+};
+
 struct BytesSOPC {
-uint32_t ssrc0 : 8;
-uint32_t ssrc1 : 8;
-uint32_t op : 7;
-uint32_t enc : 9;
-uint32_t lit_const : <class 'ctypes.c_int'>;};
+    uint32_t ssrc0 : 8;
+    uint32_t ssrc1 : 8;
+    uint32_t op : 7;
+    uint32_t enc : 9;
+    uint32_t lit_const : 32;
+};
+void printSOPC(BytesSOPC bytes) {
+printf("ssrc0 %x ,ssrc1 %x ,op %x ,enc %x ,lit_const %x \n", bytes.ssrc0,bytes.ssrc1,bytes.op,bytes.enc,bytes.lit_const);
+};
+
 struct BytesSOPP {
-uint32_t simm16 : 16;
-uint32_t op : 7;
-uint32_t enc : 9;};
+    uint32_t simm16 : 16;
+    uint32_t op : 7;
+    uint32_t enc : 9;
+};
+void printSOPP(BytesSOPP bytes) {
+printf("simm16 %x ,op %x ,enc %x \n", bytes.simm16,bytes.op,bytes.enc);
+};
+
 struct BytesSMRD {
-uint32_t offset : 8;
-uint32_t imm : 1;
-uint32_t sbase : 6;
-uint32_t sdst : 7;
-uint32_t op : 5;
-uint32_t enc : 5;};
+    uint32_t offset : 8;
+    uint32_t imm : 1;
+    uint32_t sbase : 6;
+    uint32_t sdst : 7;
+    uint32_t op : 5;
+    uint32_t enc : 5;
+};
+void printSMRD(BytesSMRD bytes) {
+printf("offset %x ,imm %x ,sbase %x ,sdst %x ,op %x ,enc %x \n", bytes.offset,bytes.imm,bytes.sbase,bytes.sdst,bytes.op,bytes.enc);
+};
+
 struct BytesMUBUF {
-uint32_t offset : 12;
-uint32_t offen : 1;
-uint32_t idxen : 1;
-uint32_t glc : 1;
-uint32_t addr64 : 1;
-uint32_t lds : 1;
-uint32_t reserved0 : 1;
-uint32_t op : 7;
-uint32_t reserved1 : 1;
-uint32_t enc : 6;
-uint32_t vaddr : 8;
-uint32_t vdata : 8;
-uint32_t srsrc : 5;
-uint32_t reserved2 : 1;
-uint32_t slc : 1;
-uint32_t tfe : 1;
-uint32_t soffset : 8;};
+    uint32_t offset : 12;
+    uint32_t offen : 1;
+    uint32_t idxen : 1;
+    uint32_t glc : 1;
+    uint32_t addr64 : 1;
+    uint32_t lds : 1;
+    uint32_t reserved0 : 1;
+    uint32_t op : 7;
+    uint32_t reserved1 : 1;
+    uint32_t enc : 6;
+    uint32_t vaddr : 8;
+    uint32_t vdata : 8;
+    uint32_t srsrc : 5;
+    uint32_t reserved2 : 1;
+    uint32_t slc : 1;
+    uint32_t tfe : 1;
+    uint32_t soffset : 8;
+};
+void printMUBUF(BytesMUBUF bytes) {
+printf("offset %x ,offen %x ,idxen %x ,glc %x ,addr64 %x ,lds %x ,reserved0 %x ,op %x ,reserved1 %x ,enc %x ,vaddr %x ,vdata %x ,srsrc %x ,reserved2 %x ,slc %x ,tfe %x ,soffset %x \n", bytes.offset,bytes.offen,bytes.idxen,bytes.glc,bytes.addr64,bytes.lds,bytes.reserved0,bytes.op,bytes.reserved1,bytes.enc,bytes.vaddr,bytes.vdata,bytes.srsrc,bytes.reserved2,bytes.slc,bytes.tfe,bytes.soffset);
+};
+
 struct BytesFLAT {
-uint32_t offset : 12;
-uint32_t offen : 1;
-uint32_t idxen : 1;
-uint32_t glc : 1;
-uint32_t addr64 : 1;
-uint32_t lds : 1;
-uint32_t reserved0 : 1;
-uint32_t op : 7;
-uint32_t reserved1 : 1;
-uint32_t enc : 6;
-uint32_t vaddr : 8;
-uint32_t vdata : 8;
-uint32_t srsrc : 5;
-uint32_t reserved2 : 1;
-uint32_t slc : 1;
-uint32_t tfe : 1;
-uint32_t soffset : 8;};
+    uint32_t offset : 8;
+    uint32_t imm : 1;
+    uint32_t vaddr : 6;
+    uint32_t vdata : 7;
+    uint32_t slc : 1;
+    uint32_t op : 5;
+    uint32_t enc : 4;
+};
+void printFLAT(BytesFLAT bytes) {
+printf("offset %x ,imm %x ,vaddr %x ,vdata %x ,slc %x ,op %x ,enc %x \n", bytes.offset,bytes.imm,bytes.vaddr,bytes.vdata,bytes.slc,bytes.op,bytes.enc);
+};
+
 struct BytesDS {
-uint32_t offset0 : 8;
-uint32_t offset1 : 8;
-uint32_t reserved : 1;
-uint32_t gds : 1;
-uint32_t op : 8;
-uint32_t enc : 6;
-uint32_t addr : 8;
-uint32_t data0 : 8;
-uint32_t data1 : 8;
-uint32_t vdst : 8;};
+    uint32_t offset0 : 8;
+    uint32_t offset1 : 8;
+    uint32_t reserved : 1;
+    uint32_t gds : 1;
+    uint32_t op : 8;
+    uint32_t enc : 6;
+    uint32_t addr : 8;
+    uint32_t data0 : 8;
+    uint32_t data1 : 8;
+    uint32_t vdst : 8;
+};
+void printDS(BytesDS bytes) {
+printf("offset0 %x ,offset1 %x ,reserved %x ,gds %x ,op %x ,enc %x ,addr %x ,data0 %x ,data1 %x ,vdst %x \n", bytes.offset0,bytes.offset1,bytes.reserved,bytes.gds,bytes.op,bytes.enc,bytes.addr,bytes.data0,bytes.data1,bytes.vdst);
+};

@@ -65,11 +65,21 @@ number: DIGIT | HEX_NUMBER | FP_NUMBER;
 
 generic_reg: register_ | ident;
 
+
 register_: sreg | vreg;
 
 sreg: ('-' | '!')? (SREG | SREG_INDEX);
 
 vreg: ('-' | '!')? (VREG | VREG_INDEX);
+
+vreg_or_number: vreg | number;
+
+generic_reg_or_number: generic_reg | number;
+
+special_operand : ident ':' special_reg;
+special_reg: sreg | vcc;
+
+vcc:  VCC;
 
 section_directive: section_name (',' section_modifier)*;
 
@@ -107,10 +117,11 @@ lop_imm
 
 
 instrvalu:
-		VALU_VOP2 vreg (',' generic_reg)? ',' vreg ('#' lop_imm)?
+		VALU_VOP2 vreg ',' generic_reg_or_number ',' vreg (',' special_operand)* 
          | VALU_VOP1 vreg ',' generic_reg
          | VALU_VOPC vreg ',' generic_reg
-         | VALU_VOP3 vreg ',' generic_reg ',' generic_reg ',' generic_reg;
+         | VALU_VOP3A vreg ',' generic_reg ',' generic_reg ',' generic_reg
+         | VALU_VOP3B vreg ',' generic_reg_or_number ',' vreg (',' special_operand)* ;
 
 instrsalu:
 		SALU_SOP1 sreg ',' sreg
@@ -183,6 +194,8 @@ SREG: S (R E G)? DIGIT;
 
 SREG_INDEX: S (R E G)? '[' DIGIT ':' DIGIT ']';
 
+VCC: V C C;
+
 comment: COMMENT;
 line_comment: LINE_COMMENT;
 
@@ -190,7 +203,6 @@ line_comment: LINE_COMMENT;
 VALU_VOP2:
 		(V '_' C N D M A S K '_' B '3' '2'
          | V '_' A D D '_' F '3' '2'
-         | V '_' A N D '_' F '3' '2'
          | V '_' S U B '_' F '3' '2'
          | V '_' S U B R E V '_' F '3' '2'
          | V '_' M U L '_' F '3' '2'
@@ -214,7 +226,10 @@ VALU_VOP2:
          | V '_' A D D '_' I '3' '2'
          | V '_' S U B '_' I '3' '2'
          | V '_' S U B R E V '_' I '3' '2'
-         | V '_' C V T '_' P K R Z '_' F '1' '6' '_' F '3' '2') E32?;
+         | V '_' A D D '_' U '3' '2'
+         | V '_' A D D C O '_' U '3' '2'
+         | V '_' S U B '_' U '3' '2'
+         | V '_' S U B R E V '_' U '3' '2') E32?;
 
 VALU_VOP1:
 		(V '_' N O P
@@ -222,6 +237,7 @@ VALU_VOP1:
          | V '_' R E A D F I R S T L A N E '_' B '3' '2'
          | V '_' C V T '_' I '3' '2' '_' F '6' '4'
          | V '_' C V T '_' F '6' '4' '_' I '3' '2'
+         | V '_' C V T '_' F '3' '2' '_' I '3' '2'
          | V '_' C V T '_' F '3' '2' '_' U '3' '2'
          | V '_' C V T '_' U '3' '2' '_' F '3' '2'
          | V '_' C V T '_' I '3' '2' '_' F '3' '2'
@@ -250,20 +266,12 @@ VALU_VOPC:
          | V '_' C M P '_' G E '_' F '3' '2'
          | V '_' C M P '_' N G T '_' F '3' '2'
          | V '_' C M P '_' N E Q '_' F '3' '2'
-         | V '_' C M P '_' L T '_' F '6' '2'
-         | V '_' C M P '_' E Q '_' F '6' '2'
-         | V '_' C M P '_' L E '_' F '6' '2'
-         | V '_' C M P '_' G T '_' F '6' '2'
-         | V '_' C M P '_' N G E '_' F '6' '2'
-         | V '_' C M P '_' N E Q '_' F '6' '2'
-         | V '_' C M P '_' N L T '_' F '6' '2'
          | V '_' C M P '_' L T '_' I '3' '2'
          | V '_' C M P '_' E Q '_' I '3' '2'
          | V '_' C M P '_' L E '_' I '3' '2'
          | V '_' C M P '_' G T '_' I '3' '2'
          | V '_' C M P '_' N E '_' I '3' '2'
          | V '_' C M P '_' G E '_' I '3' '2'
-         | V '_' C M P '_' C L A S S '_' F '6' '4'
          | V '_' C M P '_' L T '_' U '3' '2'
          | V '_' C M P '_' E Q '_' U '3' '2'
          | V '_' C M P '_' L E '_' U '3' '2'
@@ -271,13 +279,13 @@ VALU_VOPC:
          | V '_' C M P '_' N E '_' U '3' '2'
          | V '_' C M P '_' G E '_' U '3' '2') E32?;
 
-VALU_VOP3:
-		(V '_' C N D M A S K '_' B '3' '2' '_' V O P '3'
-         | V '_' A D D '_' F '3' '2' '_' V O P '3'
-         | V '_' S U B R E V '_' F '3' '2' '_' V O P '3'
-         | V '_' M U L '_' F '3' '2' '_' V O P '3'
-         | V '_' M U L '_' I '3' '2' '_' I '2' '4' '_' V O P '3'
-         | V '_' M A X '_' F '3' '2' '_' V O P '3'
+VALU_VOP3A:
+		(V '_' C N D M A S K '_' B '3' '2' '_' V O P '3' A
+         | V '_' A D D '_' F '3' '2' '_' V O P '3' A
+         | V '_' S U B R E V '_' F '3' '2' '_' V O P '3' A
+         | V '_' M U L '_' F '3' '2' '_' V O P '3' A
+         | V '_' M U L '_' I '3' '2' '_' I '2' '4' '_' V O P '3' A
+         | V '_' M A X '_' F '3' '2' '_' V O P '3' A
          | V '_' M A D '_' F '3' '2'
          | V '_' M A D '_' U '3' '2' '_' U '2' '4'
          | V '_' B F E '_' U '3' '2'
@@ -287,14 +295,44 @@ VALU_VOP3:
          | V '_' F M A '_' F '6' '4'
          | V '_' A L I G N B I T '_' B '3' '2'
          | V '_' M A X '3' '_' I '3' '2'
-         | V '_' D I V '_' F I X U P '_' F '6' '4'
          | V '_' L S H L '_' B '6' '4'
          | V '_' A S H R '_' I '6' '4'
          | V '_' M I N '_' F '6' '4'
          | V '_' M A X '_' F '6' '4'
          | V '_' M U L '_' L O '_' U '3' '2'
          | V '_' M U L '_' H I '_' U '3' '2'
-         | V '_' M U L '_' L O '_' I '3' '2') E32?;
+         | V '_' M U L '_' L O '_' I '3' '2'
+         | V '_' F R A C T '_' F '3' '2' '_' V O P '3' A
+         | V '_' C M P '_' L T '_' F '3' '2' '_' V O P '3' A
+         | V '_' C M P '_' E Q '_' F '3' '2' '_' V O P '3' A
+         | V '_' C M P '_' G T '_' F '3' '2' '_' V O P '3' A
+         | V '_' C M P '_' N L E '_' F '3' '2' '_' V O P '3' A
+         | V '_' C M P '_' N E Q '_' F '3' '2' '_' V O P '3' A
+         | V '_' C M P '_' N L T '_' F '3' '2' '_' V O P '3' A
+         | V '_' C M P '_' L T '_' I '3' '2' '_' V O P '3' A
+         | V '_' C M P '_' E Q '_' I '3' '2' '_' V O P '3' A
+         | V '_' C M P '_' L E '_' I '3' '2' '_' V O P '3' A
+         | V '_' C M P '_' G T '_' I '3' '2' '_' V O P '3' A
+         | V '_' C M P '_' G E '_' I '3' '2' '_' V O P '3' A
+         | V '_' C M P '_' N E '_' I '3' '2' '_' V O P '3' A
+         | V '_' C M P X '_' E Q '_' I '3' '2' '_' V O P '3' A
+         | V '_' C M P '_' O P '1' '6' '_' F '6' '4' '_' V O P '3' A
+         | V '_' C M P '_' C L A S S '_' F '6' '4' '_' V O P '3' A
+         | V '_' C M P '_' L T '_' U '3' '2' '_' V O P '3' A
+         | V '_' C M P '_' L E '_' U '3' '2' '_' V O P '3' A
+         | V '_' C M P '_' G T '_' U '3' '2' '_' V O P '3' A
+         | V '_' C M P '_' L G '_' U '3' '2' '_' V O P '3' A
+         | V '_' C M P '_' G E '_' U '3' '2' '_' V O P '3' A
+         | V '_' C M P '_' L T '_' U '6' '4' '_' V O P '3' A
+         | V '_' L S H R '_' B '6' '4'
+         | V '_' A D D '_' F '6' '4'
+         | V '_' M U L '_' F '6' '4'
+         | V '_' L D E X P '_' F '6' '4'
+         | V '_' C M P '_' L E '_' F '3' '2' '_' V O P '3' A
+         | V '_' M E D '3' '_' I '3' '2') E32?;
+
+VALU_VOP3B:
+		(V '_' A D D C '_' U '3' '2') E32?;
 
 SALU_SOP1:
 		(S '_' M O V '_' B '3' '2'
@@ -374,11 +412,10 @@ VMEM_MUBUF:
          | B U F F E R '_' A T O M I C '_' A D D) E32?;
 
 VMEM_FLAT:
-		(F L A T '_' L O A D '_' S B Y T E
-         | F L A T '_' L O A D '_' D W O R D
-         | F L A T '_' S T O R E '_' S B Y T E
-         | F L A T '_' S T O R E '_' D W O R D
-         | F L A T '_' A T O M I C '_' A D D) E32?;
+		(F L A T '_' L O A D '_' D W O R D
+         | F L A T '_' L O A D '_' D W O R D X '2'
+         | F L A T '_' L O A D '_' D W O R D X '4'
+         | F L A T '_' S T O R E '_' D W O R D) E32?;
 
 DMEM_DS:
 		(D S '_' A D D '_' U '3' '2'

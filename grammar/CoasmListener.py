@@ -224,6 +224,51 @@ class CoasmListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by CoasmParser#vreg_or_number.
+    def enterVreg_or_number(self, ctx:CoasmParser.Vreg_or_numberContext):
+        pass
+
+    # Exit a parse tree produced by CoasmParser#vreg_or_number.
+    def exitVreg_or_number(self, ctx:CoasmParser.Vreg_or_numberContext):
+        pass
+
+
+    # Enter a parse tree produced by CoasmParser#generic_reg_or_number.
+    def enterGeneric_reg_or_number(self, ctx:CoasmParser.Generic_reg_or_numberContext):
+        pass
+
+    # Exit a parse tree produced by CoasmParser#generic_reg_or_number.
+    def exitGeneric_reg_or_number(self, ctx:CoasmParser.Generic_reg_or_numberContext):
+        pass
+
+
+    # Enter a parse tree produced by CoasmParser#special_operand.
+    def enterSpecial_operand(self, ctx:CoasmParser.Special_operandContext):
+        pass
+
+    # Exit a parse tree produced by CoasmParser#special_operand.
+    def exitSpecial_operand(self, ctx:CoasmParser.Special_operandContext):
+        pass
+
+
+    # Enter a parse tree produced by CoasmParser#special_reg.
+    def enterSpecial_reg(self, ctx:CoasmParser.Special_regContext):
+        pass
+
+    # Exit a parse tree produced by CoasmParser#special_reg.
+    def exitSpecial_reg(self, ctx:CoasmParser.Special_regContext):
+        pass
+
+
+    # Enter a parse tree produced by CoasmParser#vcc.
+    def enterVcc(self, ctx:CoasmParser.VccContext):
+        pass
+
+    # Exit a parse tree produced by CoasmParser#vcc.
+    def exitVcc(self, ctx:CoasmParser.VccContext):
+        pass
+
+
     # Enter a parse tree produced by CoasmParser#section_directive.
     def enterSection_directive(self, ctx:CoasmParser.Section_directiveContext):
         pass

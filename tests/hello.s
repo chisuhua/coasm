@@ -5,9 +5,27 @@
 	.type	hello,@function
 hello:                                   ; @hello
 ; %bb.0:                                ; %entry
-	v_mov_b32_e32 v0, s0
-	v_mov_b32_e32 v1, s1
-	v_add_f32_e32 v2, v0, v2
+    	s_load_dwordx2 s[2:3], s[0:1] 0x2
+    	s_load_dwordx2 s[0:1], s[0:1] 0x0
+	v_lshlrev_b32 v0, 2, v0
+    	s_waitcnt 0
+
+	// v[1:2] = &in1[i]
+	v_add_u32     v1, s0, v0, co:vcc
+   	v_mov_b32     v2, s1
+	v_addc_u32    v2, 0, v2, ci:vcc, co:vcc
+	flat_load_dword v3, v[1:2] // v3 = in1[i]
+
+	// v[0:1] = &out[i]
+	v_add_u32     v0, s2, v0, co:vcc
+	v_mov_b32     v1, s3
+	v_addc_u32    v1, 0, v1, ci:vcc, co:vcc
+
+	s_waitcnt     0
+
+	v_mov_b32      v4, v3 // v3 = in1[i]
+
+        flat_store_dword v[0:1], v4
 	s_exit
 	.section	.rodata,#alloc
 	.p2align	6

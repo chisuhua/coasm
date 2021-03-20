@@ -295,6 +295,7 @@ class DefPhase(CoasmListener):
                 stype = self.id_stype[ident]
                 if stype is Symbol.TypeEnum.REG:
                     # ODO
+                    pdb.set_trace()
                     self.cur_instr.addReg(reg_alias[ident])
                 else:
                     self.cur_instr.addOperand(ident)
@@ -542,9 +543,15 @@ class DefPhase(CoasmListener):
         reg = Reg(ctx.getText())
         self.cur_instr.addReg(reg)
         pass
+
     def exitVreg(self, ctx:CoasmParser.VregContext):
         reg = Reg(ctx.getText())
         self.cur_instr.addReg(reg)
+        pass
+
+    def exitSpecial_operand(self, ctx:CoasmParser.Special_operandContext):
+        operand_type, reg_str = ctx.getText().split(":")
+        self.cur_instr.addSpecialOperand(operand_type, reg_str)
         pass
 
     def enterSize_directive(self, ctx:CoasmParser.Size_directiveContext):
@@ -788,7 +795,7 @@ if __name__ == '__main__':
         else:
             asm_input.append(line)
 
-    kernel_meta = yaml.load("".join(metas))
+    kernel_meta_raw = yaml.load("".join(metas))
     input_stream = InputStream("".join(asm_input))
 
     lexer = CoasmLexer(input_stream)
@@ -818,7 +825,8 @@ if __name__ == '__main__':
             def_phase.unresolved_instr)
     walker.walk(ref_phase, tree)
 
-    binary = lief.parse("hello_elf.bin")
+    #binary = lief.parse("hello_elf.bin")
+    binary = lief.parse("hsaco.bin")
     header = binary.header
 
     #header.identity_class = ELF.ELF_CLASS.CLASS64
@@ -848,39 +856,74 @@ if __name__ == '__main__':
 
     for name,kernel in ref_phase.kernels.items():
         func = ref_phase.functions[name]
-        sym = ELF.Symbol()
-        sym.name    = name
-        sym.type    = ELF.SYMBOL_TYPES.FUNC
-        sym.binding = ELF.SYMBOL_BINDINGS.LOCAL
-        sym.shndx   = 4 #text_section.name_idx
-        sym.value   = text_section.virtual_address + func.code_pos
-        sym.size    = func.code_size
-        symtab[name] = sym
-        binary.add_static_symbol(sym)
+        for symbol in binary.symbols:
+            if symbol.name.startswith("vector_copy"):
+                #pdb.set_trace()
+                symbol.name = symbol.name.replace("vector_copy", name)
+                symbol.value   = text_section.virtual_address + func.code_pos
+                symbol.size    = func.code_size
+                symtab[name] = symbol
+        #sym = ELF.Symbol()
+        #sym.name    = name
+        #sym.type    = ELF.SYMBOL_TYPES.FUNC
+        #sym.binding = ELF.SYMBOL_BINDINGS.GLOBAL
+        #sym.shndx   = 7 #text_section.name_idx
+        #sym.value   = text_section.virtual_address + func.code_pos
+        #sym.size    = func.code_size
+        #symtab[name] = sym
+        #binary.add_static_symbol(sym)
 
-    for k in kernel_meta["amdhsa.kernels"]:
+    kernel_meta = []
+    kernel_meta = kernel_meta_raw["amdhsa.kernels"]
+    for k in kernel_meta_raw["amdhsa.kernels"]:
         kname = k['.name']
         if kname in symtab:
-            sym = symtab[kname]
-            sym = ELF.Symbol()
-            sym.name    = k['.symbol']
-            #sym.type    = ELF.SYMBOL_TYPES.LOOS
-            sym.type    = ELF.SYMBOL_TYPES.FUNC
-            sym.binding = ELF.SYMBOL_BINDINGS.GLOBAL
-            sym.shndx   = symtab[kname].shndx
-            sym.value   = symtab[kname].value
-            sym.size    = symtab[kname].size
-            binary.add_static_symbol(sym)
+            pass
+        else:
+            assert("error")
+            #sym = symtab[kname]
+            #sym = ELF.Symbol()
+            #sym.name    = k['.symbol']
+            #sym.type    = ELF.SYMBOL_TYPES(10) # ELF.SYMBOL_TYPES.FUNC
+            #sym.binding = ELF.SYMBOL_BINDINGS.GLOBAL
+            #sym.shndx   = symtab[kname].shndx
+            #sym.value   = symtab[kname].value
+            #sym.size    = symtab[kname].size
+            #binary.add_static_symbol(sym)
 
+    dynamic_entry = ELF.DynamicEntry(ELF.DYNAMIC_TAGS.VERSYM, 7)
+    binary.add(dynamic_entry)
+
+    note_name = list(bytes("PPU.Kernels", encoding='utf-8'))
+    note_meta = [c for c in msgpack.packb([kernel_meta], use_bin_type=True)]
+
+    #note = ELF.Note("PPU.Kernels", ELF.NOTE_TYPES(0x20), note_name)
+    #binary.add(note)
+    #notes = binary.notes
+    #notes[0].description = note_meta
+
+    old_note_section = binary.get_section(".note")
+    #note_section.clear()
+    #pdb.set_trace()
     note_section = ELF.Section(".note")
-    note_section.type = ELF.SECTION_TYPES.NOTE
-    note_meta = msgpack.packb(kernel_meta, use_bin_type=True)
-    note_meta = [c for c in note_meta]
-    #.split() #string_at(addressof(note_meta))
-    note_section.content = note_meta
-    note_section.size = len(note_meta)
-
     note_section = binary.add(note_section)
+    #note_section.flags = ELF.SECTION_TYPES.NOTE
+    note_section.flags = old_note_section.flags
+    #note_section.infomation = old_note_section.infomation
+    note_section.link = old_note_section.link
+    note_section.alignment = old_note_section.alignment
+    note_section.type = old_note_section.type
+    note_section.virtual_address = old_note_section.virtual_address
+    binary.remove(old_note_section)
+
+    note_content = list(len(note_name).to_bytes(4, byteorder='little', signed=False))
+    note_content.extend(list((len(note_meta) - 1).to_bytes(4, byteorder='little', signed=False)))
+    note_content.extend(list(0x20.to_bytes(4, byteorder='little', signed=False)))
+    note_content.extend(note_name)
+    note_content.extend(note_meta)
+    #note_content = note_meta
+    note_section.content = note_content
+    note_section.size = len(note_content)
 
     binary.write(output_file)
 

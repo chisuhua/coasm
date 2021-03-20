@@ -65,11 +65,21 @@ number: DIGIT | HEX_NUMBER | FP_NUMBER;
 
 generic_reg: register_ | ident;
 
+
 register_: sreg | vreg;
 
 sreg: ('-' | '!')? (SREG | SREG_INDEX);
 
 vreg: ('-' | '!')? (VREG | VREG_INDEX);
+
+vreg_or_number: vreg | number;
+
+generic_reg_or_number: generic_reg | number;
+
+special_operand : ident ':' special_reg;
+special_reg: sreg | vcc;
+
+vcc:  VCC;
 
 section_directive: section_name (',' section_modifier)*;
 
@@ -162,6 +172,8 @@ VREG_INDEX: V (R E G)? '[' DIGIT ':' DIGIT ']';
 SREG: S (R E G)? DIGIT;
 
 SREG_INDEX: S (R E G)? '[' DIGIT ':' DIGIT ']';
+
+VCC: V C C;
 
 comment: COMMENT;
 line_comment: LINE_COMMENT;

@@ -386,18 +386,28 @@ class Instr(Structure):
     FmtEnc = namedtuple('FmtEnc', ['bit_start', 'width', 'value'])
     fmt_enc = {}
     fmt_enc["VOP2"] = FmtEnc(31, 1, 0b0)
-    fmt_enc["VOP1"] = FmtEnc(31, 7, 0b1000001)
-    fmt_enc["VOPC"] = FmtEnc(31, 7, 0b1000000)
-    fmt_enc["VOP3"] =FmtEnc(31, 6, 0b100001)
-    fmt_enc["SOP1"] = FmtEnc(31, 9, 0b100001)
     fmt_enc["SOP2"] = FmtEnc(31, 2, 0b11)
     fmt_enc["SOPK"] = FmtEnc(31, 4, 0b1001)
-    fmt_enc["SOPC"] = FmtEnc(31, 9, 0b1001)
-    fmt_enc["SOPP"] = FmtEnc(31, 9, 0b1001)
+    fmt_enc["FLAT"] = FmtEnc(31, 4, 0b1011)
     fmt_enc["SMRD"] = FmtEnc(31, 5, 0b10001)
-    fmt_enc["DS"] =   FmtEnc(31, 6, 0b101000)
-    fmt_enc["MUBUF"] =FmtEnc(31, 6, 0b101001)
-    fmt_enc["FLAT"] = FmtEnc(31, 6, 0b101010)
+    fmt_enc["DS"] =   FmtEnc(31, 6, 0b100000)
+    fmt_enc["MUBUF"] =FmtEnc(31, 6, 0b100001)
+    fmt_enc["VOP3A"] =FmtEnc(31, 6, 0b101001)
+    fmt_enc["VOP3B"] =FmtEnc(31, 6, 0b101011)
+    fmt_enc["VOP1"] = FmtEnc(31, 7, 0b1010001)
+    fmt_enc["VOPC"] = FmtEnc(31, 7, 0b1010000)
+    fmt_enc["SOPC"] = FmtEnc(31, 9, 0b101010000)
+    fmt_enc["SOPP"] = FmtEnc(31, 9, 0b101010001)
+    fmt_enc["SOP1"] = FmtEnc(31, 9, 0b101010010)
+
+    SpecialReg = namedtuple('SpecialReg', ['name', 'reg'])
+    special_reg = {}
+    special_reg['m0'] = SpecialReg("RegisterM0", Reg('s124'))
+    special_reg['vcc'] = SpecialReg("RegisterVcc", Reg('s106'))
+    special_reg['vccz'] = SpecialReg("RegisterVcc", Reg('s251'))
+    special_reg['exec'] = SpecialReg("RegisterVcc", Reg('s126'))
+    special_reg['execz'] = SpecialReg("RegisterVcc", Reg('s252'))
+    special_reg['scc'] = SpecialReg("RegisterVcc", Reg('s253'))
 
     def __init__(self, name=''):
         #super().__init__(name)
@@ -416,6 +426,7 @@ class Instr(Structure):
         self.stride_pos = 0
         self.regs = []
         self.operands = []
+        self.special_operands = {}
         self.dst_reg = None
         self.name = name       # in fact it is line number
         self.instr_str = None
@@ -426,7 +437,7 @@ class Instr(Structure):
         #        setattr(self, n, 0)
         print("[instr create info] create instr with op {}".format(name))
         if name == "":
-            print("Warn:create instr without correct op enum")
+            assert("Warn:create instr without correct op enum")
         else:
             self.enc = Instr.fmt_enc[self.getFmtName()].value
             self.op = self.OpcodeEnum[name.upper()].value
@@ -437,11 +448,21 @@ class Instr(Structure):
             self.setImm(operand)
         self.operands.append(operand)
 
+
     def addReg(self, reg: Reg):
         if self.dst_reg is None:
             self.dst_reg = reg
         self.regs.append(reg)
         self.addOperand(reg)
+
+    # for vcc etc.
+    def addSpecialOperand(self, operand_type, reg_str):
+        if reg_str in Instr.special_reg.keys():
+            self.regs.append(Instr.special_reg[reg_str].reg)
+            self.special_operands[operand_type] = Instr.special_reg[reg_str].reg
+        else:
+            self.special_operands[operand_type] = Reg(reg_str)
+        return self.special_operands[operand_type]
 
     def setImm(self, imm):
         self.imm = imm
@@ -473,7 +494,10 @@ class Instr(Structure):
 
     def getCppFieldEncode(self):
         instr_encode = "\nstruct Bytes" + self.getFmtName() +  " {\n" + \
-        "\n".join(["uint32_t {} : {};".format(n[0], n[-1]) for n in self._fields_]) + "};"
+        "\n".join(["    uint32_t {} : {};".format(n[0], n[-1]) for n in self._fields_]) + "\n};"
+        instr_encode += "\nvoid print" + self.getFmtName() + "(Bytes" + self.getFmtName() + " bytes) {\n" + \
+        "printf(\"" + ",".join(["{} %x ".format(n[0], n[-1]) for n in self._fields_]) + "\\n\", " + \
+        ",".join(["bytes.{}".format(n[0], n[-1]) for n in self._fields_]) + ");\n};\n"
         return instr_encode
 
     def getFlag(self, name):
@@ -486,7 +510,10 @@ class Instr(Structure):
         pass
 
     def genInstrAsm(self):
-        return string_at(addressof(self), self.instr_size)
+        return string_at(addressof(self), self.getInstrSize())
+
+    def getInstrSize(self):
+        return self.instr_size
 
     def getOpcodeEnumList(self):
         opcode_list = OrderedDict()
@@ -494,11 +521,11 @@ class Instr(Structure):
             opcode_list[op.name] = hex(op.value)
         return opcode_list
 
-    def genInstrOpcodeDef(self, f):
+    def genInstrOpcodeDef(self, f, fmt):
         opcode_list = self.getOpcodeEnumList()
         for n, v in opcode_list.items():
-            #TODO
-            f.write("DEFINST({},{}, {}, {}, {})\n".format(n, '" "', v, 4, 0))
+            #TODO fix instr_size with E32 flag
+            f.write("DEFINST({},{}, {}, {}, {})\n".format(n, fmt, v, self.getInstrSize(), 0))
 
     def genInstrDef(self, visit_type, f):
         if visit_type == VisitType.GEN_INSTR_FMT_FIELD:
@@ -599,13 +626,13 @@ class InstrDmem(Instr):
 
 #------------------------------
 class InstrVALU_VOP2(InstrValu):
-    _fields_ = [("src0", c_int, 8),
-                ("ssrc0_", c_int, 1),
-                ("vsrc1", c_int, 8),
-                ("vdst", c_int, 8),
-                ("op", c_int, 6),
-                ("enc", c_int, 1),
-                ("lit_const", c_int, 32)]
+    _fields_ = [("src0", c_uint, 8),
+                ("ssrc0_", c_uint, 1),
+                ("vsrc1", c_uint, 8),
+                ("vdst", c_uint, 8),
+                ("op", c_uint, 6),
+                ("enc", c_uint, 1),
+                ("lit_const", c_uint, 32)]
 
     def __init__(self, name=''):
         super().__init__(name)
@@ -613,7 +640,6 @@ class InstrVALU_VOP2(InstrValu):
     class OpcodeEnum(Enum):
         V_CNDMASK_B32              = 0x0
         V_ADD_F32                  = 0x1
-        V_AND_F32                  = 0x2
         V_SUB_F32                  = 0x3
         V_SUBREV_F32               = 0x4
         V_MUL_F32                  = 0x5
@@ -637,10 +663,14 @@ class InstrVALU_VOP2(InstrValu):
         V_ADD_I32                  = 0x23
         V_SUB_I32                  = 0x24
         V_SUBREV_I32               = 0x25
-        V_CVT_PKRZ_F16_F32         = 0x26
+        V_ADD_U32                  = 0x26
+        V_ADDCO_U32                = 0x27
+        V_SUB_U32                  = 0x28
+        V_SUBREV_U32               = 0x29
+        #V_CVT_PKRZ_F16_F32         = 0x26
 
     def genGrammarInstrClass(self):
-        return self.getInstrDefName() + " vreg (',' generic_reg)? ',' vreg ('#' lop_imm)?"
+        return self.getInstrDefName() + " vreg ',' generic_reg_or_number ',' vreg (',' special_operand)* "
 
     def addOperand(self, operand):
         super().addOperand(operand)
@@ -648,7 +678,10 @@ class InstrVALU_VOP2(InstrValu):
             assert(isinstance(operand, Reg))
             self.vdst = operand.idx
         elif len(self.operands) == 2:
-            assert(isinstance(operand, Reg))
+            if isinstance(operand, int):
+                self.lit_const = operand
+                self.src0 = 0xFF
+                return
             self.src0 = operand.idx
             if (operand.rtype == Reg.RegType.Scalar):
                 self.ssrc0_ = 1
@@ -656,27 +689,44 @@ class InstrVALU_VOP2(InstrValu):
                 self.ssrc0_ = 0
         elif len(self.operands) == 3:
             assert(isinstance(operand, Reg))
+            #if isinstance(operand, int):
+            #    self.lit_const = operand
+            #    self.vsrc1 = 0xFF
+            #elif isinstance(operand, Reg):
             self.vsrc1 = operand.idx
 
+    def addSpecialOperand(self, operand_type, reg_str):
+        assert(operand_type == "co" and reg_str == "vcc")
+        reg = super().addSpecialOperand(operand_type, reg_str)
+        if (self.op == self.OpcodeEnum.V_ADD_U32.value):
+            self.op = self.OpcodeEnum.V_ADDCO_U32.value
+
+
+    def getInstrSize(self):
+        if self.src0 == 0xFF:
+            return self.instr_size
+        else:
+            return 4
 
 
 class InstrVALU_VOP1(InstrValu):
-    _fields_ = [("src0", c_int, 8),
-                ("ssrc0_", c_int, 1),
-                ("op", c_int, 8),
-                ("vdst", c_int, 8),
-                ("enc", c_int, 7),
-                ("lit_const", c_int, 32)]
+    _fields_ = [("src0", c_uint, 8),
+                ("ssrc0_", c_uint, 1),
+                ("op", c_uint, 8),
+                ("vdst", c_uint, 8),
+                ("enc", c_uint, 7),
+                ("lit_const", c_uint, 32)]
 
     def __init__(self, name=''):
         super().__init__(name)
 
     class OpcodeEnum(Enum):
-        V_NOP                         = 0x1
-        V_MOV_B32                     = 0x2
-        V_READFIRSTLANE_B32           = 0x3
-        V_CVT_I32_F64                 = 0x4
-        V_CVT_F64_I32                 = 0x5
+        V_NOP                         = 0x0
+        V_MOV_B32                     = 0x1
+        V_READFIRSTLANE_B32           = 0x2
+        V_CVT_I32_F64                 = 0x3
+        V_CVT_F64_I32                 = 0x4
+        V_CVT_F32_I32                 = 0x5
         V_CVT_F32_U32                 = 0x6
         V_CVT_U32_F32                 = 0x7
         V_CVT_I32_F32                 = 0x8
@@ -711,18 +761,24 @@ class InstrVALU_VOP1(InstrValu):
             assert(isinstance(operand, Reg))
             self.src0 = operand.idx
             if (operand.rtype == Reg.RegType.Scalar):
-                self.ssrc0_ = 1
-            else:
                 self.ssrc0_ = 0
+            else:
+                self.ssrc0_ = 1
+
+    def getInstrSize(self):
+        if self.src0 == 0xFF:
+            return self.instr_size
+        else:
+            return 4
 
 
 class InstrVALU_VOPC(InstrValu):
-    _fields_ = [("src0", c_int, 8),
-                ("ssrc0_", c_int, 1),
-                ("vsrc1", c_int, 8),
-                ("op", c_int, 8),
-                ("enc", c_int, 7),
-                ("lit_const", c_int, 32)]
+    _fields_ = [("src0", c_uint, 8),
+                ("ssrc0_", c_uint, 1),
+                ("vsrc1", c_uint, 8),
+                ("op", c_uint, 8),
+                ("enc", c_uint, 7),
+                ("lit_const", c_uint, 32)]
 
     def __init__(self, name=''):
         super().__init__(name)
@@ -733,20 +789,20 @@ class InstrVALU_VOPC(InstrValu):
         V_CMP_GE_F32                = 0x3
         V_CMP_NGT_F32               = 0x4
         V_CMP_NEQ_F32               = 0x5
-        V_CMP_LT_F62                = 0x6
-        V_CMP_EQ_F62                = 0x7
-        V_CMP_LE_F62                = 0x8
-        V_CMP_GT_F62                = 0xa
-        V_CMP_NGE_F62               = 0xb
-        V_CMP_NEQ_F62               = 0xc
-        V_CMP_NLT_F62               = 0xd
+        #V_CMP_LT_F64                = 0x6
+        #V_CMP_EQ_F64                = 0x7
+        #V_CMP_LE_F64                = 0x8
+        #V_CMP_GT_F64                = 0xa
+        #V_CMP_NGE_F64               = 0xb
+        #V_CMP_NEQ_F64              = 0xc
+        #V_CMP_NLT_F64               = 0xd
         V_CMP_LT_I32                = 0xe
         V_CMP_EQ_I32                = 0xf
         V_CMP_LE_I32                = 0x10
         V_CMP_GT_I32                = 0x11
         V_CMP_NE_I32                = 0x12
         V_CMP_GE_I32                = 0x13
-        V_CMP_CLASS_F64             = 0x14
+        #V_CMP_CLASS_F64             = 0x14
         V_CMP_LT_U32                = 0x15
         V_CMP_EQ_U32                = 0x16
         V_CMP_LE_U32                = 0x17
@@ -766,33 +822,39 @@ class InstrVALU_VOPC(InstrValu):
             assert(isinstance(operand, Reg))
             self.src0 = operand.idx
             if (operand.rtype == Reg.RegType.Scalar):
-                self.ssrc0_ = 1
-            else:
                 self.ssrc0_ = 0
+            else:
+                self.ssrc0_ = 1
 
-class InstrVALU_VOP3(InstrValu):
-    _fields_ = [("vdst", c_int, 8),
-                ("abs", c_int, 3),
-                ("clamp", c_int, 1),
-                ("reserved", c_int, 5),
-                ("op", c_int, 9),
-                ("enc", c_int, 6),
-                ("src0", c_int, 9),
-                ("src1", c_int, 9),
-                ("src2", c_int, 9),
-                ("omod", c_int, 2),
-                ("neg", c_int, 3)]
+    def getInstrSize(self):
+        if self.src0 == 0xFF:
+            return self.instr_size
+        else:
+            return 4
+
+class InstrVALU_VOP3A(InstrValu):
+    _fields_ = [("vdst", c_uint, 8),
+                ("abs", c_uint, 3),
+                ("clamp", c_uint, 1),
+                ("reserved", c_uint, 5),
+                ("op", c_uint, 9),
+                ("enc", c_uint, 6),
+                ("src0", c_uint, 9),
+                ("src1", c_uint, 9),
+                ("src2", c_uint, 9),
+                ("omod", c_uint, 2),
+                ("neg", c_uint, 3)]
 
     def __init__(self, name=''):
         super().__init__(name)
 
     class OpcodeEnum(Enum):
-        V_CNDMASK_B32_VOP3     = 0x1
-        V_ADD_F32_VOP3         = 0x2
-        V_SUBREV_F32_VOP3      = 0x3
-        V_MUL_F32_VOP3         = 0x4
-        V_MUL_I32_I24_VOP3     = 0x5
-        V_MAX_F32_VOP3         = 0x6
+        V_CNDMASK_B32_VOP3A     = 0x1
+        V_ADD_F32_VOP3A         = 0x2
+        V_SUBREV_F32_VOP3A      = 0x3
+        V_MUL_F32_VOP3A         = 0x4
+        V_MUL_I32_I24_VOP3A     = 0x5
+        V_MAX_F32_VOP3A         = 0x6
         V_MAD_F32               = 0x7
         V_MAD_U32_U24           = 0x8
         V_BFE_U32               = 0x9
@@ -802,7 +864,8 @@ class InstrVALU_VOP3(InstrValu):
         V_FMA_F64               = 0xd
         V_ALIGNBIT_B32          = 0xe
         V_MAX3_I32              = 0xf
-        V_DIV_FIXUP_F64         = 0x10
+        #V_DIV_FIXUP_F64         = 0x10
+        #V_DIV_FMAS_F64         = 0x10
         V_LSHL_B64              = 0x11
         V_ASHR_I64              = 0x12
         V_MIN_F64               = 0x13
@@ -810,6 +873,35 @@ class InstrVALU_VOP3(InstrValu):
         V_MUL_LO_U32            = 0x15
         V_MUL_HI_U32            = 0x16
         V_MUL_LO_I32            = 0x17
+        V_FRACT_F32_VOP3A       = 0x18
+        V_CMP_LT_F32_VOP3A      = 0x19
+        V_CMP_EQ_F32_VOP3A      = 0x1a
+        V_CMP_GT_F32_VOP3A      = 0x1b
+        V_CMP_NLE_F32_VOP3A     = 0x1c
+        V_CMP_NEQ_F32_VOP3A     = 0x1d
+        V_CMP_NLT_F32_VOP3A     = 0x1e
+        V_CMP_LT_I32_VOP3A      = 0x1f
+        V_CMP_EQ_I32_VOP3A      = 0x20
+        V_CMP_LE_I32_VOP3A      = 0x21
+        V_CMP_GT_I32_VOP3A      = 0x22
+        V_CMP_GE_I32_VOP3A      = 0x23
+        V_CMP_NE_I32_VOP3A      = 0x24
+        V_CMPX_EQ_I32_VOP3A     = 0x25
+        V_CMP_OP16_F64_VOP3A    = 0x26
+        V_CMP_CLASS_F64_VOP3A   = 0x27
+        V_CMP_LT_U32_VOP3A      = 0x28
+        V_CMP_LE_U32_VOP3A      = 0x29
+        V_CMP_GT_U32_VOP3A      = 0x2a
+        V_CMP_LG_U32_VOP3A      = 0x2b
+        V_CMP_GE_U32_VOP3A      = 0x2c
+        V_CMP_LT_U64_VOP3A      = 0x2d
+        V_LSHR_B64              = 0x30
+        V_ADD_F64               = 0x31
+        V_MUL_F64               = 0x32
+        V_LDEXP_F64             = 0x33
+        V_CMP_LE_F32_VOP3A      = 0x38
+        #V_MED3_I32_VOP3A        = 0x39
+        V_MED3_I32              = 0x3a
 
     def genGrammarInstrClass(self):
         return self.getInstrDefName() + " vreg ',' generic_reg ',' generic_reg ',' generic_reg"
@@ -822,30 +914,81 @@ class InstrVALU_VOP3(InstrValu):
         elif len(self.operands) == 2:
             assert(isinstance(operand, Reg))
             self.src0 = operand.idx
-            if (operand.rtype == Reg.RegType.Scalar):
+            if (operand.rtype == Reg.RegType.Vector):
                 self.src0 += 0x100
         elif len(self.operands) == 3:
             assert(isinstance(operand, Reg))
             self.src1 = operand.idx
-            if (operand.rtype == Reg.RegType.Scalar):
+            if (operand.rtype == Reg.RegType.Vector):
                 self.src1 += 0x100
         elif len(self.operands) == 4:
             assert(isinstance(operand, Reg))
             self.src1 = operand.idx
-            if (operand.rtype == Reg.RegType.Scalar):
+            if (operand.rtype == Reg.RegType.Vector):
                 self.src1 += 0x100
 
+    def getInstrSize(self):
+        if self.src0 == 0xFF:
+            return self.instr_size
+        else:
+            return 4
+
+class InstrVALU_VOP3B(InstrValu):
+    _fields_ = [("vdst", c_uint, 8),
+                ("sdst", c_uint, 7),
+                ("src0", c_uint, 9),
+                ("op", c_uint, 2),
+                ("enc", c_uint, 6),
+                ("vsrc1", c_uint, 8),
+                ("ssrc2", c_uint, 8),
+                ("lit_const", c_uint, 16)]
+
+    def __init__(self, name=''):
+        super().__init__(name)
+
+    class OpcodeEnum(Enum):
+        V_ADDC_U32     = 0x1
+
+    def genGrammarInstrClass(self):
+        return self.getInstrDefName() + " vreg ',' generic_reg_or_number ',' vreg (',' special_operand)* "
+
+    def addOperand(self, operand):
+        super().addOperand(operand)
+        if len(self.operands) == 1:
+            assert(isinstance(operand, Reg))
+            self.vdst = operand.idx
+        elif len(self.operands) == 2:
+            if isinstance(operand, int):
+                self.lit_const = operand
+                self.src0 = 0xFF
+                return
+            assert(isinstance(operand, Reg))
+            self.src0 = operand.idx
+            if (operand.rtype == Reg.RegType.Vector):
+                self.src0 += 0x100
+        elif len(self.operands) == 3:
+            assert(isinstance(operand, Reg))
+            assert(operand.rtype == Reg.RegType.Vector)
+            self.vsrc1 = operand.idx
+
+    def addSpecialOperand(self, operand_type, reg_str):
+        reg = super().addSpecialOperand(operand_type, reg_str)
+        if (operand_type == "co"):
+            self.sdst = reg.idx
+        elif (operand_type == "ci"):
+            self.ssrc2 = reg.idx
 
 
-
+    def getInstrSize(self):
+        return self.instr_size
 
  #------------------------------
 class InstrSALU_SOP1(InstrSalu):
-    _fields_ = [("ssrc0", c_int, 8),
-                ("op", c_int, 8),
-                ("sdst", c_int, 7),
-                ("enc", c_int, 9),
-                ("lit_const", c_int, 32)]
+    _fields_ = [("ssrc0", c_uint, 8),
+                ("op", c_uint, 8),
+                ("sdst", c_uint, 7),
+                ("enc", c_uint, 9),
+                ("lit_const", c_uint, 32)]
 
 
     def __init__(self, name=''):
@@ -871,13 +1014,20 @@ class InstrSALU_SOP1(InstrSalu):
             assert(isinstance(operand, Reg))
             self.ssrc0 = operand.idx
 
+    def getInstrSize(self):
+        if self.ssrc0 == 0xFF:
+            return self.instr_size
+        else:
+            return 4
+
+
 class InstrSALU_SOP2(InstrSalu):
-    _fields_ = [("ssrc0", c_int, 8),
-                ("ssrc1", c_int, 8),
-                ("sdst", c_int, 7),
-                ("op", c_int, 7),
-                ("enc", c_int, 2),
-                ("lit_const", c_int, 32)]
+    _fields_ = [("ssrc0", c_uint, 8),
+                ("ssrc1", c_uint, 8),
+                ("sdst", c_uint, 7),
+                ("op", c_uint, 7),
+                ("enc", c_uint, 2),
+                ("lit_const", c_uint, 32)]
 
     def __init__(self, name=''):
         super().__init__(name)
@@ -919,12 +1069,17 @@ class InstrSALU_SOP2(InstrSalu):
             assert(isinstance(operand, Reg))
             self.ssrc1 = operand.idx
 
+    def getInstrSize(self):
+        if self.ssrc0 == 0xFF or self.ssrc1 == 0xFF:
+            return self.instr_size
+        else:
+            return 4
 
 class InstrSALU_SOPK(InstrSalu):
-    _fields_ = [("simm16", c_int, 16),
-                ("sdst", c_int, 7),
-                ("op", c_int, 5),
-                ("enc", c_int, 4)]
+    _fields_ = [("simm16", c_uint, 16),
+                ("sdst", c_uint, 7),
+                ("op", c_uint, 5),
+                ("enc", c_uint, 4)]
 
     def __init__(self, name=''):
         super().__init__(name)
@@ -949,11 +1104,11 @@ class InstrSALU_SOPK(InstrSalu):
 
 
 class InstrSALU_SOPC(InstrSalu):
-    _fields_ = [("ssrc0", c_int, 8),
-                ("ssrc1", c_int, 8),
-                ("op", c_int, 7),
-                ("enc", c_int, 9),
-                ("lit_const", c_int)]
+    _fields_ = [("ssrc0", c_uint, 8),
+                ("ssrc1", c_uint, 8),
+                ("op", c_uint, 7),
+                ("enc", c_uint, 9),
+                ("lit_const", c_uint, 32)]
 
 
     def __init__(self, name=''):
@@ -981,10 +1136,16 @@ class InstrSALU_SOPC(InstrSalu):
             assert(isinstance(operand, Reg))
             self.ssrc1 = operand.idx
 
+    def getInstrSize(self):
+        if self.ssrc0 == 0xFF or self.ssrc1 == 0xFF:
+            return self.instr_size
+        else:
+            return 4
+
 class InstrSALU_SOPP(InstrSalu):
-    _fields_ = [("simm16", c_int, 16),
-                ("op", c_int, 7),
-                ("enc", c_int, 9)]
+    _fields_ = [("simm16", c_uint, 16),
+                ("op", c_uint, 7),
+                ("enc", c_uint, 9)]
 
 
     def __init__(self, name=''):
@@ -1007,12 +1168,12 @@ class InstrSALU_SOPP(InstrSalu):
         return self.getInstrDefName() + " (number | wait_expr (',' wait_expr)*)?"
 
 class InstrSMEM_SMRD(InstrSmem):
-    _fields_ = [("offset", c_int, 8),
-                ("imm", c_int, 1),
-                ("sbase", c_int, 6),
-                ("sdst", c_int, 7),
-                ("op", c_int, 5),
-                ("enc", c_int, 5)]
+    _fields_ = [("offset", c_uint, 8),
+                ("imm", c_uint, 1),
+                ("sbase", c_uint, 6),
+                ("sdst", c_uint, 7),
+                ("op", c_uint, 5),
+                ("enc", c_uint, 5)]
 
 
     def __init__(self, name=''):
@@ -1050,16 +1211,16 @@ class InstrSMEM_SMRD(InstrSmem):
                 self.imm = 1
 
 class InstrDMEM_DS(InstrDmem):
-    _fields_ = [("offset0", c_int, 8),
-                ("offset1", c_int, 8),
-                ("reserved", c_int, 1),
-                ("gds", c_int, 1),
-                ("op", c_int, 8),
-                ("enc", c_int, 6),
-                ("addr", c_int, 8),
-                ("data0", c_int, 8),
-                ("data1", c_int, 8),
-                ("vdst", c_int, 8)]
+    _fields_ = [("offset0", c_uint, 8),
+                ("offset1", c_uint, 8),
+                ("reserved", c_uint, 1),
+                ("gds", c_uint, 1),
+                ("op", c_uint, 8),
+                ("enc", c_uint, 6),
+                ("addr", c_uint, 8),
+                ("data0", c_uint, 8),
+                ("data1", c_uint, 8),
+                ("vdst", c_uint, 8)]
 
     def __init__(self, name=''):
        super().__init__(name)
@@ -1082,23 +1243,23 @@ class InstrDMEM_DS(InstrDmem):
         return self.getInstrDefName() + " (vreg | ident | mem_expr_list) ',' mem_expr_list"
 
 class InstrVMEM_MUBUF(InstrVmem):
-    _fields_ = [("offset", c_int, 12),
-                ("offen",  c_int, 1),
-                ("idxen",  c_int, 1),
-                ("glc",    c_int, 1),
-                ("addr64", c_int, 1),
-                ("lds",    c_int, 1),
-                ("reserved0", c_int, 1),
-                ("op",     c_int, 7),
-                ("reserved1", c_int, 1),
-                ("enc",    c_int, 6),
-                ("vaddr", c_int, 8),
-                ("vdata", c_int, 8),
-                ("srsrc", c_int, 5),
-                ("reserved2", c_int, 1),
-                ("slc",   c_int, 1),
-                ("tfe",   c_int, 1),
-                ("soffset", c_int, 8)]
+    _fields_ = [("offset", c_uint, 12),
+                ("offen",  c_uint, 1),
+                ("idxen",  c_uint, 1),
+                ("glc",    c_uint, 1),
+                ("addr64", c_uint, 1),
+                ("lds",    c_uint, 1),
+                ("reserved0", c_uint, 1),
+                ("op",     c_uint, 7),
+                ("reserved1", c_uint, 1),
+                ("enc",    c_uint, 6),
+                ("vaddr", c_uint, 8),
+                ("vdata", c_uint, 8),
+                ("srsrc", c_uint, 5),
+                ("reserved2", c_uint, 1),
+                ("slc",   c_uint, 1),
+                ("tfe",   c_uint, 1),
+                ("soffset", c_uint, 8)]
 
 
     def __init__(self, name=''):
@@ -1116,37 +1277,55 @@ class InstrVMEM_MUBUF(InstrVmem):
         return self.getInstrDefName() + " vreg ',' vreg ',' sreg ',' sreg"
 
 class InstrVMEM_FLAT(InstrVmem):
-    _fields_ = [("offset", c_int, 12),
-                ("offen",  c_int, 1),
-                ("idxen",  c_int, 1),
-                ("glc",    c_int, 1),
-                ("addr64", c_int, 1),
-                ("lds",    c_int, 1),
-                ("reserved0", c_int, 1),
-                ("op",     c_int, 7),
-                ("reserved1", c_int, 1),
-                ("enc",    c_int, 6),
-                ("vaddr", c_int, 8),
-                ("vdata", c_int, 8),
-                ("srsrc", c_int, 5),
-                ("reserved2", c_int, 1),
-                ("slc",   c_int, 1),
-                ("tfe",   c_int, 1),
-                ("soffset", c_int, 8)]
+    _fields_ = [("offset", c_uint, 8),
+                ("imm",   c_uint, 1),
+                ("vaddr", c_uint, 6),
+                ("vdata", c_uint, 7),
+                ("slc",   c_uint, 1),
+                ("op",    c_uint, 5),
+                ("enc",   c_uint, 4)]
 
 
     def __init__(self, name=''):
         super().__init__(name)
 
     class OpcodeEnum(Enum):
-        FLAT_LOAD_SBYTE                = 0x1
-        FLAT_LOAD_DWORD                = 0x2
-        FLAT_STORE_SBYTE               = 0x3
-        FLAT_STORE_DWORD               = 0x4
-        FLAT_ATOMIC_ADD                = 0x5
+        #FLAT_LOAD_SBYTE                = 0x1
+        FLAT_LOAD_DWORD                 = 0x2
+        FLAT_LOAD_DWORDX2               = 0x3
+        FLAT_LOAD_DWORDX4               = 0x4
+        #FLAT_STORE_SBYTE               = 0x3
+        FLAT_STORE_DWORD                = 0x5
+        #FLAT_ATOMIC_ADD                = 0x5
 
 
     def genGrammarInstrClass(self):
         return self.getInstrDefName() + " vreg ',' vreg"
+
+    def isStoreOp(self):
+        return self.op >= self.OpcodeEnum.FLAT_STORE_DWORD.value
+
+    def addOperand(self, operand):
+        super().addOperand(operand)
+
+        if len(self.operands) == 1:
+            assert(isinstance(operand, Reg))
+            if self.isStoreOp():
+                self.vaddr = operand.idx
+            else:
+                self.vdata = operand.idx
+        elif len(self.operands) == 2:
+            assert(isinstance(operand, Reg))
+            if self.isStoreOp():
+                self.vdata = operand.idx
+            else:
+                self.vaddr = operand.idx
+        elif len(self.operands) == 3:
+            if (isinstance(operand, Reg)):
+                self.offset = operand.idx
+                self.imm = 0
+            else:
+                self.offset = operand
+                self.imm = 1
 
 
