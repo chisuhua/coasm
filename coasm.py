@@ -432,6 +432,7 @@ class Instr(Structure):
         self.instr_str = None
         self.func_name = None
         self.instr_size = sizeof(self)
+        self.mspace = None
         #if hasattr(self, "field"):
         #    for n,v in self.field.items():
         #        setattr(self, n, 0)
@@ -476,6 +477,9 @@ class Instr(Structure):
     def setFlag(self, *name):
         for n in name:
             self.flags[n] = True
+
+    def setMspace(self, mspace):
+        self.mspace = mspace
 
     def getFmtName(self):
         _, fmt = self.__class__.__name__.split('_')
@@ -1192,7 +1196,7 @@ class InstrSMEM_SMRD(InstrSmem):
         S_BUFFER_LOAD_DWORDX16        = 0x9
 
     def genGrammarInstrClass(self):
-        return self.getInstrDefName() + " (sreg | ident) ',' sreg ',' (sreg | number)"
+        return self.getInstrDefName() + " (sreg | ident) ',' sreg ',' (sreg | number) ('-' op_mspace)* "
 
     def addOperand(self, operand):
         super().addOperand(operand)

@@ -1,4 +1,4 @@
-# Generated from Coasm.g4 by ANTLR 4.8
+# Generated from grammar/Coasm.g4 by ANTLR 4.8
 from antlr4 import *
 if __name__ is not None and "." in __name__:
     from .CoasmParser import CoasmParser
@@ -239,6 +239,78 @@ class CoasmListener(ParseTreeListener):
 
     # Exit a parse tree produced by CoasmParser#generic_reg_or_number.
     def exitGeneric_reg_or_number(self, ctx:CoasmParser.Generic_reg_or_numberContext):
+        pass
+
+
+    # Enter a parse tree produced by CoasmParser#op_mspace.
+    def enterOp_mspace(self, ctx:CoasmParser.Op_mspaceContext):
+        pass
+
+    # Exit a parse tree produced by CoasmParser#op_mspace.
+    def exitOp_mspace(self, ctx:CoasmParser.Op_mspaceContext):
+        pass
+
+
+    # Enter a parse tree produced by CoasmParser#mspace_kind.
+    def enterMspace_kind(self, ctx:CoasmParser.Mspace_kindContext):
+        pass
+
+    # Exit a parse tree produced by CoasmParser#mspace_kind.
+    def exitMspace_kind(self, ctx:CoasmParser.Mspace_kindContext):
+        pass
+
+
+    # Enter a parse tree produced by CoasmParser#flat.
+    def enterFlat(self, ctx:CoasmParser.FlatContext):
+        pass
+
+    # Exit a parse tree produced by CoasmParser#flat.
+    def exitFlat(self, ctx:CoasmParser.FlatContext):
+        pass
+
+
+    # Enter a parse tree produced by CoasmParser#priv.
+    def enterPriv(self, ctx:CoasmParser.PrivContext):
+        pass
+
+    # Exit a parse tree produced by CoasmParser#priv.
+    def exitPriv(self, ctx:CoasmParser.PrivContext):
+        pass
+
+
+    # Enter a parse tree produced by CoasmParser#const.
+    def enterConst(self, ctx:CoasmParser.ConstContext):
+        pass
+
+    # Exit a parse tree produced by CoasmParser#const.
+    def exitConst(self, ctx:CoasmParser.ConstContext):
+        pass
+
+
+    # Enter a parse tree produced by CoasmParser#param.
+    def enterParam(self, ctx:CoasmParser.ParamContext):
+        pass
+
+    # Exit a parse tree produced by CoasmParser#param.
+    def exitParam(self, ctx:CoasmParser.ParamContext):
+        pass
+
+
+    # Enter a parse tree produced by CoasmParser#global_.
+    def enterGlobal_(self, ctx:CoasmParser.Global_Context):
+        pass
+
+    # Exit a parse tree produced by CoasmParser#global_.
+    def exitGlobal_(self, ctx:CoasmParser.Global_Context):
+        pass
+
+
+    # Enter a parse tree produced by CoasmParser#shared_.
+    def enterShared_(self, ctx:CoasmParser.Shared_Context):
+        pass
+
+    # Exit a parse tree produced by CoasmParser#shared_.
+    def exitShared_(self, ctx:CoasmParser.Shared_Context):
         pass
 
 

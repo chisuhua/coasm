@@ -76,6 +76,18 @@ vreg_or_number: vreg | number;
 
 generic_reg_or_number: generic_reg | number;
 
+// op_mspace : ident ':' mspace_kind;
+// mspace_kind: (FLAT | SHARED);
+op_mspace : ident ':' mspace_kind;
+mspace_kind: flat | priv | const | param | global_ | shared_;
+
+flat: FLAT;
+priv: PRIVATE;
+const: CONST;
+param: PARAM;
+global_: GLOBAL_;
+shared_: SHARED_;
+
 special_operand : ident ':' special_reg;
 special_reg: sreg | vcc;
 
@@ -175,6 +187,18 @@ SREG_INDEX: S (R E G)? '[' DIGIT ':' DIGIT ']';
 
 VCC: V C C;
 
+FLAT: F L A T;
+
+PRIVATE: P R I V A T E;
+
+CONST: C O N S T;
+
+PARAM: P A R A M;
+
+GLOBAL_: G L O B A L;
+
+SHARED_: S H A R E D;
+
 comment: COMMENT;
 line_comment: LINE_COMMENT;
 
@@ -265,6 +289,8 @@ SIZE: '.' S I Z E;
 FUNC_END: '.' L F U N C '_' E N D ('0' .. '9')+;
 
 IDENT: '.ident' ~ [\r\n]* -> skip;
+
+MSPACE: 'mspace';
 
 DECL_FUNC: '@function';
 

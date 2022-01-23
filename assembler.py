@@ -44,6 +44,7 @@ def info(token, msg):
 class Var(VariableSymbol):
     def __init__(self, name, dtype: DataType, mspace: MemSpace):
         super().__init__(name)
+        pdb.set_trace()
         self.size = None
         self.data_type = dtype
         self.mem_space = mspace
@@ -460,6 +461,7 @@ class DefPhase(CoasmListener):
         mspace = MemSpace(ctx.MEM_SPACE().getText())
         if mspace.kind == MemSpace.KindEnum.INVALID:
             error(ctx.start, "ERROR: unknow memory space" + ident)
+        info(ctx.start, "Enter Mem {}".format(ident))
 
         dtype = DataType(ctx.DATA_TYPE().getText())
         self.cur_var = Var(ident, dtype, mspace)
@@ -554,6 +556,12 @@ class DefPhase(CoasmListener):
         self.cur_instr.addSpecialOperand(operand_type, reg_str)
         pass
 
+    # Exit a parse tree produced by CoasmParser#op_mspace.
+    def exitOp_mspace(self, ctx:CoasmParser.Op_mspaceContext):
+        _, mspace = ctx.getText().split(":")
+        self.cur_instr.setMspace(mspace)
+        pass
+
     def enterSize_directive(self, ctx:CoasmParser.Size_directiveContext):
         pass
 
@@ -614,17 +622,18 @@ class DefPhase(CoasmListener):
         instr_fmt = CoasmParser.symbolicNames[token.type]
         op_str = token.text.upper().replace('.', '_')
         instr_op, instr_flag = self.parseInstrOp(op_str)
-        info(token, "enter Instrucion" + instr_fmt + ", op " + instr_op)
+        info(token, "Enter Instrucion" + instr_fmt + ", op:{}".format(instr_op))
         exec("self.cur_instr = Instr{}(instr_op)".format(instr_fmt))
         cur_instr = self.cur_instr
         for k,v in instr_flag.items():
+            print("\tflag: {} {}".format(k,v))
             cur_instr.setFlag(k)
 
     def exitInstruction(self, ctx:CoasmParser.InstructionContext):
         if self.cur_instr is None:
             error(ctx, "ERROR: invalid intruction")
         if self.cur_function is not None:
-            print("instr: Line={}, opcode={}".format(self.cur_instr.name, self.cur_instr))
+            print("Exit Instr: Line={}, opcode={}".format(self.cur_instr.name, self.cur_instr))
             #self.instrs.append(self.cur_instr)
             if len(self.cur_label) > 0:
                 for label in self.cur_label:

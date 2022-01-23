@@ -5,10 +5,10 @@
 	.type	hello,@function
 hello:                                   ; @hello
 ; %bb.0:                                ; %entry
-    	s_load_dwordx2 s[2:3], s[0:1] 0x2
-    	s_load_dwordx2 s[0:1], s[0:1] 0x0
+   	s_load_dwordx2 s[2:3], s[0:1], 0x2 - mspace:global
+    s_load_dwordx2 s[0:1], s[0:1], 0x0
 	v_lshlrev_b32 v0, 2, v0
-    	s_waitcnt 0
+    s_waitcnt 0
 
 	// v[1:2] = &in1[i]
 	v_add_u32     v1, s0, v0, co:vcc
@@ -25,7 +25,7 @@ hello:                                   ; @hello
 
 	v_mov_b32      v4, v3 // v3 = in1[i]
 
-        flat_store_dword v[0:1], v4
+    flat_store_dword v[0:1], v4
 	s_exit
 	.section	.rodata,#alloc
 	.p2align	6
