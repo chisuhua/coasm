@@ -132,7 +132,7 @@ void printSLS(BytesSLS bytes) {
 printf("offset %x ,imm %x ,sbase %x ,sdst %x ,op %x ,enc %x \n", bytes.offset,bytes.imm,bytes.sbase,bytes.sdst,bytes.op,bytes.enc);
 };
 
-struct BytesMUBUF {
+struct BytesVMUBUF {
     uint32_t offset : 12;
     uint32_t offen : 1;
     uint32_t idxen : 1;
@@ -151,7 +151,7 @@ struct BytesMUBUF {
     uint32_t tfe : 1;
     uint32_t soffset : 8;
 };
-void printMUBUF(BytesMUBUF bytes) {
+void printVMUBUF(BytesVMUBUF bytes) {
 printf("offset %x ,offen %x ,idxen %x ,glc %x ,addr64 %x ,lds %x ,reserved0 %x ,op %x ,reserved1 %x ,enc %x ,vaddr %x ,vdata %x ,srsrc %x ,reserved2 %x ,slc %x ,tfe %x ,soffset %x \n", bytes.offset,bytes.offen,bytes.idxen,bytes.glc,bytes.addr64,bytes.lds,bytes.reserved0,bytes.op,bytes.reserved1,bytes.enc,bytes.vaddr,bytes.vdata,bytes.srsrc,bytes.reserved2,bytes.slc,bytes.tfe,bytes.soffset);
 };
 

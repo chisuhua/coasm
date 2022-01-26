@@ -398,8 +398,8 @@ class Instr(Structure):
     fmt_enc["SLS"] =  FmtEnc(31, 4, 0b1011)
     fmt_enc["VSMRD"] =FmtEnc(31, 5, 0b100010)
     fmt_enc["DLS"] =  FmtEnc(31, 6, 0b100000)
-    fmt_enc["VLS"] =FmtEnc(31, 6, 0b100001)
-    fmt_enc["MUBUF"] =FmtEnc(31, 6, 0b100011)
+    fmt_enc["VLS"] =  FmtEnc(31, 6, 0b100001)
+    fmt_enc["VMUBUF"]=FmtEnc(31, 6, 0b100011)
     fmt_enc["VOP3A"] =FmtEnc(31, 6, 0b101001)
     fmt_enc["VOP3B"] =FmtEnc(31, 6, 0b101011)
     fmt_enc["VOP1"] = FmtEnc(31, 7, 0b1010001)
@@ -538,6 +538,11 @@ class Instr(Structure):
         for n, v in opcode_list.items():
             #TODO fix instr_size with E32 flag
             f.write("DEFINST({},{}, {}, {}, {})\n".format(n, fmt, v, self.getInstrSize(), 0))
+        f.write("DEFINSTEND({})\n".format(fmt))
+        for n, v in opcode_list.items():
+            #TODO fix instr_size with E32 flag
+            f.write("DEFINST2({})\n".format(n))
+
 
     def genInstrDef(self, visit_type, f):
         if visit_type == VisitType.GEN_INSTR_FMT_FIELD:
@@ -760,6 +765,7 @@ class InstrVALU_VOP1(InstrValu):
         V_FRACT_F64                 = 0x18
         V_MOVRELD_B32                 = 0x19
         V_MOVRELS_B32                 = 0x1a
+        V_SEXT_I64_I32               = 0x1b
 
     def genGrammarInstrClass(self):
         return self.getInstrDefName() + " vreg ',' generic_reg"
@@ -1238,23 +1244,23 @@ class InstrDMEM_DLS(InstrDmem):
        super().__init__(name)
 
     class OpcodeEnum(Enum):
-        DS_ADD_U32                = 0x1
-        DS_INC_U32                = 0x2
-        DS_WRITE_B32              = 0x3
-        DS_WRITE2_B32             = 0x4
-        DS_WRITE_B8               = 0x5
-        DS_WRITE_B16              = 0x6
-        DS_READ_B32               = 0x7
-        DS_READ2_B32              = 0x8
-        DS_READ_I8                = 0x9
-        DS_READ_U8                = 0xa
-        DS_READ_I16               = 0xb
-        DS_READ_U16               = 0xc
+        D_ADD_U32                = 0x1
+        D_INC_U32                = 0x2
+        D_WRITE_B32              = 0x3
+        D_WRITE2_B32             = 0x4
+        D_WRITE_B8               = 0x5
+        D_WRITE_B16              = 0x6
+        D_READ_B32               = 0x7
+        D_READ2_B32              = 0x8
+        D_READ_I8                = 0x9
+        D_READ_U8                = 0xa
+        D_READ_I16               = 0xb
+        D_READ_U16               = 0xc
 
     def genGrammarInstrClass(self):
         return self.getInstrDefName() + " (vreg | ident | mem_expr_list) ',' mem_expr_list"
 
-class InstrVMEM_MUBUF(InstrVmem):
+class InstrVMEM_VMUBUF(InstrVmem):
     _fields_ = [("offset", c_uint, 12),
                 ("offen",  c_uint, 1),
                 ("idxen",  c_uint, 1),

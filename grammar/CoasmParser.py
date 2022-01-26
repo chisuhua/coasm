@@ -346,7 +346,7 @@ class CoasmParser ( Parser ):
                       "PRIVATE", "CONST", "PARAM", "GLOBAL_", "SHARED_", 
                       "MSPACE", "VALU_VOP2", "VALU_VOP1", "VALU_VOPC", "VALU_VOP3A", 
                       "VALU_VOP3B", "SALU_SOP1", "SALU_SOP2", "SALU_SOPK", 
-                      "SALU_SOPC", "SALU_SOPP", "SMEM_SLS", "VMEM_MUBUF", 
+                      "SALU_SOPC", "SALU_SOPP", "SMEM_SLS", "VMEM_VMUBUF", 
                       "VMEM_VLS", "DMEM_DLS", "WAIT_TYPE", "COMMENT", "LINE_COMMENT", 
                       "NAME", "MEM_SPACE", "DATA_DIRECTIVE", "START_KERNEL", 
                       "END_KERNEL", "DATA_TYPE", "DIGIT", "HEX_NUMBER", 
@@ -484,7 +484,7 @@ class CoasmParser ( Parser ):
     SALU_SOPC=41
     SALU_SOPP=42
     SMEM_SLS=43
-    VMEM_MUBUF=44
+    VMEM_VMUBUF=44
     VMEM_VLS=45
     DMEM_DLS=46
     WAIT_TYPE=47
@@ -562,7 +562,7 @@ class CoasmParser ( Parser ):
             self.state = 135
             self._errHandler.sync(self)
             _la = self._input.LA(1)
-            while ((((_la - 14)) & ~0x3f) == 0 and ((1 << (_la - 14)) & ((1 << (CoasmParser.KERNEL_OPTION_KEY - 14)) | (1 << (CoasmParser.ALIAS - 14)) | (1 << (CoasmParser.REG - 14)) | (1 << (CoasmParser.VALU_VOP2 - 14)) | (1 << (CoasmParser.VALU_VOP1 - 14)) | (1 << (CoasmParser.VALU_VOPC - 14)) | (1 << (CoasmParser.VALU_VOP3A - 14)) | (1 << (CoasmParser.VALU_VOP3B - 14)) | (1 << (CoasmParser.SALU_SOP1 - 14)) | (1 << (CoasmParser.SALU_SOP2 - 14)) | (1 << (CoasmParser.SALU_SOPK - 14)) | (1 << (CoasmParser.SALU_SOPC - 14)) | (1 << (CoasmParser.SALU_SOPP - 14)) | (1 << (CoasmParser.SMEM_SLS - 14)) | (1 << (CoasmParser.VMEM_MUBUF - 14)) | (1 << (CoasmParser.VMEM_VLS - 14)) | (1 << (CoasmParser.DMEM_DLS - 14)) | (1 << (CoasmParser.NAME - 14)) | (1 << (CoasmParser.MEM_SPACE - 14)) | (1 << (CoasmParser.DATA_DIRECTIVE - 14)) | (1 << (CoasmParser.START_KERNEL - 14)) | (1 << (CoasmParser.END_KERNEL - 14)) | (1 << (CoasmParser.TYPE - 14)) | (1 << (CoasmParser.INST - 14)) | (1 << (CoasmParser.P2ALIGN - 14)) | (1 << (CoasmParser.SIZE - 14)) | (1 << (CoasmParser.IDENT - 14)) | (1 << (CoasmParser.EXTERN - 14)) | (1 << (CoasmParser.VISIBLE - 14)) | (1 << (CoasmParser.PREDEF_SECTION - 14)) | (1 << (CoasmParser.SECTION - 14)))) != 0):
+            while ((((_la - 14)) & ~0x3f) == 0 and ((1 << (_la - 14)) & ((1 << (CoasmParser.KERNEL_OPTION_KEY - 14)) | (1 << (CoasmParser.ALIAS - 14)) | (1 << (CoasmParser.REG - 14)) | (1 << (CoasmParser.VALU_VOP2 - 14)) | (1 << (CoasmParser.VALU_VOP1 - 14)) | (1 << (CoasmParser.VALU_VOPC - 14)) | (1 << (CoasmParser.VALU_VOP3A - 14)) | (1 << (CoasmParser.VALU_VOP3B - 14)) | (1 << (CoasmParser.SALU_SOP1 - 14)) | (1 << (CoasmParser.SALU_SOP2 - 14)) | (1 << (CoasmParser.SALU_SOPK - 14)) | (1 << (CoasmParser.SALU_SOPC - 14)) | (1 << (CoasmParser.SALU_SOPP - 14)) | (1 << (CoasmParser.SMEM_SLS - 14)) | (1 << (CoasmParser.VMEM_VMUBUF - 14)) | (1 << (CoasmParser.VMEM_VLS - 14)) | (1 << (CoasmParser.DMEM_DLS - 14)) | (1 << (CoasmParser.NAME - 14)) | (1 << (CoasmParser.MEM_SPACE - 14)) | (1 << (CoasmParser.DATA_DIRECTIVE - 14)) | (1 << (CoasmParser.START_KERNEL - 14)) | (1 << (CoasmParser.END_KERNEL - 14)) | (1 << (CoasmParser.TYPE - 14)) | (1 << (CoasmParser.INST - 14)) | (1 << (CoasmParser.P2ALIGN - 14)) | (1 << (CoasmParser.SIZE - 14)) | (1 << (CoasmParser.IDENT - 14)) | (1 << (CoasmParser.EXTERN - 14)) | (1 << (CoasmParser.VISIBLE - 14)) | (1 << (CoasmParser.PREDEF_SECTION - 14)) | (1 << (CoasmParser.SECTION - 14)))) != 0):
                 self.state = 132
                 self.line()
                 self.state = 137
@@ -3212,7 +3212,7 @@ class CoasmParser ( Parser ):
                 self.state = 375
                 self.instrsmem()
                 pass
-            elif token in [CoasmParser.VMEM_MUBUF, CoasmParser.VMEM_VLS]:
+            elif token in [CoasmParser.VMEM_VMUBUF, CoasmParser.VMEM_VLS]:
                 self.enterOuterAlt(localctx, 4)
                 self.state = 376
                 self.instrvmem()
@@ -3891,7 +3891,7 @@ class CoasmParser ( Parser ):
                         _la = self._input.LA(1)
 
                     pass
-                elif token in [CoasmParser.EOF, CoasmParser.KERNEL_OPTION_KEY, CoasmParser.ALIAS, CoasmParser.REG, CoasmParser.VALU_VOP2, CoasmParser.VALU_VOP1, CoasmParser.VALU_VOPC, CoasmParser.VALU_VOP3A, CoasmParser.VALU_VOP3B, CoasmParser.SALU_SOP1, CoasmParser.SALU_SOP2, CoasmParser.SALU_SOPK, CoasmParser.SALU_SOPC, CoasmParser.SALU_SOPP, CoasmParser.SMEM_SLS, CoasmParser.VMEM_MUBUF, CoasmParser.VMEM_VLS, CoasmParser.DMEM_DLS, CoasmParser.LINE_COMMENT, CoasmParser.NAME, CoasmParser.MEM_SPACE, CoasmParser.DATA_DIRECTIVE, CoasmParser.START_KERNEL, CoasmParser.END_KERNEL, CoasmParser.TYPE, CoasmParser.INST, CoasmParser.P2ALIGN, CoasmParser.SIZE, CoasmParser.IDENT, CoasmParser.EXTERN, CoasmParser.VISIBLE, CoasmParser.PREDEF_SECTION, CoasmParser.SECTION]:
+                elif token in [CoasmParser.EOF, CoasmParser.KERNEL_OPTION_KEY, CoasmParser.ALIAS, CoasmParser.REG, CoasmParser.VALU_VOP2, CoasmParser.VALU_VOP1, CoasmParser.VALU_VOPC, CoasmParser.VALU_VOP3A, CoasmParser.VALU_VOP3B, CoasmParser.SALU_SOP1, CoasmParser.SALU_SOP2, CoasmParser.SALU_SOPK, CoasmParser.SALU_SOPC, CoasmParser.SALU_SOPP, CoasmParser.SMEM_SLS, CoasmParser.VMEM_VMUBUF, CoasmParser.VMEM_VLS, CoasmParser.DMEM_DLS, CoasmParser.LINE_COMMENT, CoasmParser.NAME, CoasmParser.MEM_SPACE, CoasmParser.DATA_DIRECTIVE, CoasmParser.START_KERNEL, CoasmParser.END_KERNEL, CoasmParser.TYPE, CoasmParser.INST, CoasmParser.P2ALIGN, CoasmParser.SIZE, CoasmParser.IDENT, CoasmParser.EXTERN, CoasmParser.VISIBLE, CoasmParser.PREDEF_SECTION, CoasmParser.SECTION]:
                     pass
                 else:
                     pass
@@ -4018,8 +4018,8 @@ class CoasmParser ( Parser ):
             super().__init__(parent, invokingState)
             self.parser = parser
 
-        def VMEM_MUBUF(self):
-            return self.getToken(CoasmParser.VMEM_MUBUF, 0)
+        def VMEM_VMUBUF(self):
+            return self.getToken(CoasmParser.VMEM_VMUBUF, 0)
 
         def vreg(self, i:int=None):
             if i is None:
@@ -4076,10 +4076,10 @@ class CoasmParser ( Parser ):
             self.state = 545
             self._errHandler.sync(self)
             token = self._input.LA(1)
-            if token in [CoasmParser.VMEM_MUBUF]:
+            if token in [CoasmParser.VMEM_VMUBUF]:
                 self.enterOuterAlt(localctx, 1)
                 self.state = 519
-                self.match(CoasmParser.VMEM_MUBUF)
+                self.match(CoasmParser.VMEM_VMUBUF)
                 self.state = 520
                 self.vreg()
                 self.state = 521

@@ -148,7 +148,7 @@ instrsmem:
 		SMEM_SLS (sreg | ident) ',' sreg ',' (sreg | number) ('%' mspace_all)? ;
 
 instrvmem:
-		VMEM_MUBUF vreg ',' vreg ',' sreg ',' sreg
+		VMEM_VMUBUF vreg ',' vreg ',' sreg ',' sreg
          | VMEM_VLS vreg ',' (vreg | dreg) ',' (vreg | dreg | number) ('%' mspace_all)?;
 
 instrdmem:
@@ -290,7 +290,8 @@ VALU_VOP1:
          | V '_' F F B H '_' U '3' '2'
          | V '_' F R A C T '_' F '6' '4'
          | V '_' M O V R E L D '_' B '3' '2'
-         | V '_' M O V R E L S '_' B '3' '2') E32?;
+         | V '_' M O V R E L S '_' B '3' '2'
+         | V '_' S E X T '_' I '6' '4' '_' I '3' '2') E32?;
 
 VALU_VOPC:
 		(V '_' C M P '_' L T '_' F '3' '2'
@@ -431,7 +432,7 @@ SMEM_SLS:
          | S '_' L O A D '_' D W O R D X '8'
          | S '_' L O A D '_' D W O R D X '1' '6') E32?;
 
-VMEM_MUBUF:
+VMEM_VMUBUF:
 		(V '_' B U F F E R '_' L O A D '_' S B Y T E
          | V '_' B U F F E R '_' L O A D '_' D W O R D
          | V '_' B U F F E R '_' S T O R E '_' S B Y T E
@@ -445,18 +446,18 @@ VMEM_VLS:
          | V '_' S T O R E '_' D W O R D) E32?;
 
 DMEM_DLS:
-		(D S '_' A D D '_' U '3' '2'
-         | D S '_' I N C '_' U '3' '2'
-         | D S '_' W R I T E '_' B '3' '2'
-         | D S '_' W R I T E '2' '_' B '3' '2'
-         | D S '_' W R I T E '_' B '8'
-         | D S '_' W R I T E '_' B '1' '6'
-         | D S '_' R E A D '_' B '3' '2'
-         | D S '_' R E A D '2' '_' B '3' '2'
-         | D S '_' R E A D '_' I '8'
-         | D S '_' R E A D '_' U '8'
-         | D S '_' R E A D '_' I '1' '6'
-         | D S '_' R E A D '_' U '1' '6') E32?;
+		(D '_' A D D '_' U '3' '2'
+         | D '_' I N C '_' U '3' '2'
+         | D '_' W R I T E '_' B '3' '2'
+         | D '_' W R I T E '2' '_' B '3' '2'
+         | D '_' W R I T E '_' B '8'
+         | D '_' W R I T E '_' B '1' '6'
+         | D '_' R E A D '_' B '3' '2'
+         | D '_' R E A D '2' '_' B '3' '2'
+         | D '_' R E A D '_' I '8'
+         | D '_' R E A D '_' U '8'
+         | D '_' R E A D '_' I '1' '6'
+         | D '_' R E A D '_' U '1' '6') E32?;
 
 
 wait_expr: WAIT_TYPE ('(' DIGIT ')')?;
