@@ -5,8 +5,8 @@
 	.type	hello,@function
 hello:                                   ; @hello
 ; %bb.0:                                ; %entry
-   	s_load_dwordx2 s[2:3], s[0:1], 0x2 - mspace:global
-    s_load_dwordx2 s[0:1], s[0:1], 0x0
+    v_load_dwordx2 s[0:1], kernel_param_base, 0x0 % mspace:param
+   	v_load_dwordx2 s[2:3], kernel_param_base, 0x2 - mspace:param
 	v_lshlrev_b32 v0, 2, v0
     s_waitcnt 0
 

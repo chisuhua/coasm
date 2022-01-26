@@ -281,6 +281,7 @@ class Reg(VariableSymbol):
     class RegType(Enum):
         Scalar         = 0
         Vector         = 1
+        Data           = 2
     def __init__(self, reg_str):
         self.is_neg = False
         self.reg_name = None
@@ -288,6 +289,8 @@ class Reg(VariableSymbol):
         self.end_idx = None
         start_pos = 0
         print("INFO: reg str:" + reg_str)
+        if len(reg_str) == 0:
+            assert("Reg is null str")
         if reg_str[0] == '-' or reg_str[0] == '!':
             self.is_neg = True
             start_pos = 1
@@ -315,6 +318,8 @@ class Reg(VariableSymbol):
             self.rtype = Reg.RegType.Scalar
         elif reg_str[0] == "v":
             self.rtype = Reg.RegType.Vector
+        elif reg_str[0] == "d":
+            self.rtype = Reg.RegType.Data
         else:
             assert("invalid reg name")
 
@@ -323,9 +328,11 @@ class Reg(VariableSymbol):
 
     def __str__(self):
         if self.end_idx is not None:
-            return "{}[{}:{}]".format( "sreg" if self.rtype is Reg.RegType.Scalar else "vreg", self.idx, self.end_idx)
+            return "{}[{}:{}]".format( "sreg" if self.rtype is Reg.RegType.Scalar else "vreg" if self.rtype is Reg.RegType.Vector else "dreg",
+                    self.idx, self.end_idx)
         else:
-            return "{}{}".format( "sreg" if self.rtype is Reg.RegType.Scalar else "vreg", self.idx)
+            return "{}{}".format( "sreg" if self.rtype is Reg.RegType.Scalar else "vreg" if self.rtype is Reg.RegType.Vector else "dreg",
+                    self.idx)
 
 class LabelSymbol(Symbol):
     def __init__(self, name):
@@ -388,10 +395,11 @@ class Instr(Structure):
     fmt_enc["VOP2"] = FmtEnc(31, 1, 0b0)
     fmt_enc["SOP2"] = FmtEnc(31, 2, 0b11)
     fmt_enc["SOPK"] = FmtEnc(31, 4, 0b1001)
-    fmt_enc["FLAT"] = FmtEnc(31, 4, 0b1011)
-    fmt_enc["SMRD"] = FmtEnc(31, 5, 0b10001)
-    fmt_enc["DS"] =   FmtEnc(31, 6, 0b100000)
-    fmt_enc["MUBUF"] =FmtEnc(31, 6, 0b100001)
+    fmt_enc["SLS"] =  FmtEnc(31, 4, 0b1011)
+    fmt_enc["VSMRD"] =FmtEnc(31, 5, 0b100010)
+    fmt_enc["DLS"] =  FmtEnc(31, 6, 0b100000)
+    fmt_enc["VLS"] =FmtEnc(31, 6, 0b100001)
+    fmt_enc["MUBUF"] =FmtEnc(31, 6, 0b100011)
     fmt_enc["VOP3A"] =FmtEnc(31, 6, 0b101001)
     fmt_enc["VOP3B"] =FmtEnc(31, 6, 0b101011)
     fmt_enc["VOP1"] = FmtEnc(31, 7, 0b1010001)
@@ -1171,7 +1179,7 @@ class InstrSALU_SOPP(InstrSalu):
     def genGrammarInstrClass(self):
         return self.getInstrDefName() + " (number | wait_expr (',' wait_expr)*)?"
 
-class InstrSMEM_SMRD(InstrSmem):
+class InstrSMEM_SLS(InstrSmem):
     _fields_ = [("offset", c_uint, 8),
                 ("imm", c_uint, 1),
                 ("sbase", c_uint, 6),
@@ -1189,14 +1197,14 @@ class InstrSMEM_SMRD(InstrSmem):
         S_LOAD_DWORDX4                = 0x2
         S_LOAD_DWORDX8                = 0x3
         S_LOAD_DWORDX16               = 0x4
-        S_BUFFER_LOAD_DWORD           = 0x5
-        S_BUFFER_LOAD_DWORDX2         = 0x6
-        S_BUFFER_LOAD_DWORDX4         = 0x7
-        S_BUFFER_LOAD_DWORDX8         = 0x8
-        S_BUFFER_LOAD_DWORDX16        = 0x9
+        #S_BUFFER_LOAD_DWORD           = 0x5
+        #S_BUFFER_LOAD_DWORDX2         = 0x6
+        #S_BUFFER_LOAD_DWORDX4         = 0x7
+        #S_BUFFER_LOAD_DWORDX8         = 0x8
+        #S_BUFFER_LOAD_DWORDX16        = 0x9
 
     def genGrammarInstrClass(self):
-        return self.getInstrDefName() + " (sreg | ident) ',' sreg ',' (sreg | number) ('-' op_mspace)* "
+        return self.getInstrDefName() + " (sreg | ident) ',' sreg ',' (sreg | number) ('%' mspace_all)? "
 
     def addOperand(self, operand):
         super().addOperand(operand)
@@ -1214,7 +1222,7 @@ class InstrSMEM_SMRD(InstrSmem):
                 self.offset = operand
                 self.imm = 1
 
-class InstrDMEM_DS(InstrDmem):
+class InstrDMEM_DLS(InstrDmem):
     _fields_ = [("offset0", c_uint, 8),
                 ("offset1", c_uint, 8),
                 ("reserved", c_uint, 1),
@@ -1270,17 +1278,17 @@ class InstrVMEM_MUBUF(InstrVmem):
        super().__init__(name)
 
     class OpcodeEnum(Enum):
-        BUFFER_LOAD_SBYTE                = 0x1
-        BUFFER_LOAD_DWORD                = 0x2
-        BUFFER_STORE_SBYTE               = 0x3
-        BUFFER_STORE_DWORD               = 0x4
-        BUFFER_ATOMIC_ADD                = 0x5
+        V_BUFFER_LOAD_SBYTE                = 0x1
+        V_BUFFER_LOAD_DWORD                = 0x2
+        V_BUFFER_STORE_SBYTE               = 0x3
+        V_BUFFER_STORE_DWORD               = 0x4
+        V_BUFFER_ATOMIC_ADD                = 0x5
 
 
     def genGrammarInstrClass(self):
         return self.getInstrDefName() + " vreg ',' vreg ',' sreg ',' sreg"
 
-class InstrVMEM_FLAT(InstrVmem):
+class InstrVMEM_VLS(InstrVmem):
     _fields_ = [("offset", c_uint, 8),
                 ("imm",   c_uint, 1),
                 ("vaddr", c_uint, 6),
@@ -1295,19 +1303,19 @@ class InstrVMEM_FLAT(InstrVmem):
 
     class OpcodeEnum(Enum):
         #FLAT_LOAD_SBYTE                = 0x1
-        FLAT_LOAD_DWORD                 = 0x2
-        FLAT_LOAD_DWORDX2               = 0x3
-        FLAT_LOAD_DWORDX4               = 0x4
+        V_LOAD_DWORD                 = 0x2
+        V_LOAD_DWORDX2               = 0x3
+        V_LOAD_DWORDX4               = 0x4
         #FLAT_STORE_SBYTE               = 0x3
-        FLAT_STORE_DWORD                = 0x5
+        V_STORE_DWORD                = 0x5
         #FLAT_ATOMIC_ADD                = 0x5
 
 
     def genGrammarInstrClass(self):
-        return self.getInstrDefName() + " vreg ',' vreg"
+        return self.getInstrDefName() + " vreg ',' (vreg | dreg) ',' (vreg | dreg | number) ('%' mspace_all)?"
 
     def isStoreOp(self):
-        return self.op >= self.OpcodeEnum.FLAT_STORE_DWORD.value
+        return self.op >= self.OpcodeEnum.V_STORE_DWORD.value
 
     def addOperand(self, operand):
         super().addOperand(operand)

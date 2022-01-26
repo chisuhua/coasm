@@ -66,25 +66,27 @@ number: DIGIT | HEX_NUMBER | FP_NUMBER;
 generic_reg: register_ | ident;
 
 
-register_: sreg | vreg;
+register_: sreg | vreg | dreg;
 
 sreg: ('-' | '!')? (SREG | SREG_INDEX);
 
 vreg: ('-' | '!')? (VREG | VREG_INDEX);
 
+dreg: ('-' | '!')? (DREG | DREG_INDEX);
+
 vreg_or_number: vreg | number;
 
 generic_reg_or_number: generic_reg | number;
 
-// op_mspace : ident ':' mspace_kind;
-// mspace_kind: (FLAT | SHARED);
-op_mspace : ident ':' mspace_kind;
-mspace_kind: flat | priv | const | param | global_ | shared_;
+mspace_all: MSPACE ':' (flat_ | private_ | const_ | param_ | global_ | shared_);
+mspace_global: MSPACE ':' global_;
+mspace_shared: MSPACE ':' shared_;
+mspace_flat: MSPACE ':' flat_;
 
-flat: FLAT;
-priv: PRIVATE;
-const: CONST;
-param: PARAM;
+flat_: FLAT;
+private_: PRIVATE;
+const_: CONST;
+param_: PARAM;
 global_: GLOBAL_;
 shared_: SHARED_;
 
@@ -143,14 +145,14 @@ instrsalu:
          | SALU_SOPP (number | wait_expr (',' wait_expr)*)?;
 
 instrsmem:
-		SMEM_SMRD (sreg | ident) ',' sreg ',' (sreg | number) ('-' op_mspace)* ;
+		SMEM_SLS (sreg | ident) ',' sreg ',' (sreg | number) ('%' mspace_all)? ;
 
 instrvmem:
 		VMEM_MUBUF vreg ',' vreg ',' sreg ',' sreg
-         | VMEM_FLAT vreg ',' vreg;
+         | VMEM_VLS vreg ',' (vreg | dreg) ',' (vreg | dreg | number) ('%' mspace_all)?;
 
 instrdmem:
-		DMEM_DS (vreg | ident | mem_expr_list) ',' mem_expr_list;
+		DMEM_DLS (vreg | ident | mem_expr_list) ',' mem_expr_list;
 
 
 
@@ -198,6 +200,10 @@ REG: '.' R E G;
 TID: '%' T I D;
 PC: '%' P C;
 
+DREG: D (R E G)? DIGIT;
+
+DREG_INDEX: D (R E G)? '[' DIGIT ':' DIGIT ']';
+
 VREG: V (R E G)? DIGIT;
 
 VREG_INDEX: V (R E G)? '[' DIGIT ':' DIGIT ']';
@@ -219,6 +225,8 @@ PARAM: P A R A M;
 GLOBAL_: G L O B A L;
 
 SHARED_: S H A R E D;
+
+MSPACE: 'mspace';
 
 comment: COMMENT;
 line_comment: LINE_COMMENT;
@@ -416,32 +424,27 @@ SALU_SOPP:
          | S '_' W A I T C N T
          | S '_' P H I) E32?;
 
-SMEM_SMRD:
+SMEM_SLS:
 		(S '_' L O A D '_' D W O R D
          | S '_' L O A D '_' D W O R D X '2'
          | S '_' L O A D '_' D W O R D X '4'
          | S '_' L O A D '_' D W O R D X '8'
-         | S '_' L O A D '_' D W O R D X '1' '6'
-         | S '_' B U F F E R '_' L O A D '_' D W O R D
-         | S '_' B U F F E R '_' L O A D '_' D W O R D X '2'
-         | S '_' B U F F E R '_' L O A D '_' D W O R D X '4'
-         | S '_' B U F F E R '_' L O A D '_' D W O R D X '8'
-         | S '_' B U F F E R '_' L O A D '_' D W O R D X '1' '6') E32?;
+         | S '_' L O A D '_' D W O R D X '1' '6') E32?;
 
 VMEM_MUBUF:
-		(B U F F E R '_' L O A D '_' S B Y T E
-         | B U F F E R '_' L O A D '_' D W O R D
-         | B U F F E R '_' S T O R E '_' S B Y T E
-         | B U F F E R '_' S T O R E '_' D W O R D
-         | B U F F E R '_' A T O M I C '_' A D D) E32?;
+		(V '_' B U F F E R '_' L O A D '_' S B Y T E
+         | V '_' B U F F E R '_' L O A D '_' D W O R D
+         | V '_' B U F F E R '_' S T O R E '_' S B Y T E
+         | V '_' B U F F E R '_' S T O R E '_' D W O R D
+         | V '_' B U F F E R '_' A T O M I C '_' A D D) E32?;
 
-VMEM_FLAT:
-		(F L A T '_' L O A D '_' D W O R D
-         | F L A T '_' L O A D '_' D W O R D X '2'
-         | F L A T '_' L O A D '_' D W O R D X '4'
-         | F L A T '_' S T O R E '_' D W O R D) E32?;
+VMEM_VLS:
+		(V '_' L O A D '_' D W O R D
+         | V '_' L O A D '_' D W O R D X '2'
+         | V '_' L O A D '_' D W O R D X '4'
+         | V '_' S T O R E '_' D W O R D) E32?;
 
-DMEM_DS:
+DMEM_DLS:
 		(D S '_' A D D '_' U '3' '2'
          | D S '_' I N C '_' U '3' '2'
          | D S '_' W R I T E '_' B '3' '2'
@@ -538,8 +541,6 @@ SIZE: '.' S I Z E;
 FUNC_END: '.' L F U N C '_' E N D ('0' .. '9')+;
 
 IDENT: '.ident' ~ [\r\n]* -> skip;
-
-MSPACE: 'mspace';
 
 DECL_FUNC: '@function';
 

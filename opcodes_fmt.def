@@ -120,7 +120,7 @@ void printSOPP(BytesSOPP bytes) {
 printf("simm16 %x ,op %x ,enc %x \n", bytes.simm16,bytes.op,bytes.enc);
 };
 
-struct BytesSMRD {
+struct BytesSLS {
     uint32_t offset : 8;
     uint32_t imm : 1;
     uint32_t sbase : 6;
@@ -128,7 +128,7 @@ struct BytesSMRD {
     uint32_t op : 5;
     uint32_t enc : 5;
 };
-void printSMRD(BytesSMRD bytes) {
+void printSLS(BytesSLS bytes) {
 printf("offset %x ,imm %x ,sbase %x ,sdst %x ,op %x ,enc %x \n", bytes.offset,bytes.imm,bytes.sbase,bytes.sdst,bytes.op,bytes.enc);
 };
 
@@ -155,7 +155,7 @@ void printMUBUF(BytesMUBUF bytes) {
 printf("offset %x ,offen %x ,idxen %x ,glc %x ,addr64 %x ,lds %x ,reserved0 %x ,op %x ,reserved1 %x ,enc %x ,vaddr %x ,vdata %x ,srsrc %x ,reserved2 %x ,slc %x ,tfe %x ,soffset %x \n", bytes.offset,bytes.offen,bytes.idxen,bytes.glc,bytes.addr64,bytes.lds,bytes.reserved0,bytes.op,bytes.reserved1,bytes.enc,bytes.vaddr,bytes.vdata,bytes.srsrc,bytes.reserved2,bytes.slc,bytes.tfe,bytes.soffset);
 };
 
-struct BytesFLAT {
+struct BytesVLS {
     uint32_t offset : 8;
     uint32_t imm : 1;
     uint32_t vaddr : 6;
@@ -164,11 +164,11 @@ struct BytesFLAT {
     uint32_t op : 5;
     uint32_t enc : 4;
 };
-void printFLAT(BytesFLAT bytes) {
+void printVLS(BytesVLS bytes) {
 printf("offset %x ,imm %x ,vaddr %x ,vdata %x ,slc %x ,op %x ,enc %x \n", bytes.offset,bytes.imm,bytes.vaddr,bytes.vdata,bytes.slc,bytes.op,bytes.enc);
 };
 
-struct BytesDS {
+struct BytesDLS {
     uint32_t offset0 : 8;
     uint32_t offset1 : 8;
     uint32_t reserved : 1;
@@ -180,6 +180,6 @@ struct BytesDS {
     uint32_t data1 : 8;
     uint32_t vdst : 8;
 };
-void printDS(BytesDS bytes) {
+void printDLS(BytesDLS bytes) {
 printf("offset0 %x ,offset1 %x ,reserved %x ,gds %x ,op %x ,enc %x ,addr %x ,data0 %x ,data1 %x ,vdst %x \n", bytes.offset0,bytes.offset1,bytes.reserved,bytes.gds,bytes.op,bytes.enc,bytes.addr,bytes.data0,bytes.data1,bytes.vdst);
 };

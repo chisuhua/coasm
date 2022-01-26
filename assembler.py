@@ -551,13 +551,18 @@ class DefPhase(CoasmListener):
         self.cur_instr.addReg(reg)
         pass
 
+    def exitDreg(self, ctx:CoasmParser.DregContext):
+        reg = Reg(ctx.getText())
+        self.cur_instr.addReg(reg)
+        pass
+
     def exitSpecial_operand(self, ctx:CoasmParser.Special_operandContext):
         operand_type, reg_str = ctx.getText().split(":")
         self.cur_instr.addSpecialOperand(operand_type, reg_str)
         pass
 
     # Exit a parse tree produced by CoasmParser#op_mspace.
-    def exitOp_mspace(self, ctx:CoasmParser.Op_mspaceContext):
+    def exitMspace_all(self, ctx:CoasmParser.Mspace_allContext):
         _, mspace = ctx.getText().split(":")
         self.cur_instr.setMspace(mspace)
         pass
@@ -779,6 +784,21 @@ class RefPhase(CoasmListener):
 is_kernel_option = False;
 is_kernel_meta = False;
 
+# FIXM to use kernel_meta
+def fixSpecialRegALias(line):
+    line = line.replace("kernel_param_base", "d[0:1]")
+    line = line.replace("block_dim_x", "d2")
+    line = line.replace("block_dim_y", "d3")
+    line = line.replace("block_dim_z", "d4")
+    line = line.replace("block_idx_x", "d5")
+    line = line.replace("block_idx_y", "d6")
+    line = line.replace("block_idx_z", "d6")
+    line = line.replace("thread_idx_x", "v0")
+    line = line.replace("thread_idx_y", "v1")
+    line = line.replace("thread_idx_z", "v2")
+    line = line.replace("tcc", "s10")
+    return line
+
 if __name__ == '__main__':
     asm_input = []
     metas = []
@@ -802,7 +822,7 @@ if __name__ == '__main__':
         if is_kernel_meta == True:
             metas.append(line)
         else:
-            asm_input.append(line)
+            asm_input.append(fixSpecialRegALias(line))
 
     kernel_meta_raw = yaml.load("".join(metas))
     input_stream = InputStream("".join(asm_input))
