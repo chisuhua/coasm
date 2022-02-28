@@ -855,7 +855,7 @@ if __name__ == '__main__':
     walker.walk(ref_phase, tree)
 
     #binary = lief.parse("hello_elf.bin")
-    binary = lief.parse("hsaco.bin")
+    binary = lief.parse(os.path.join(os.path.split(os.path.abspath(__file__))[0], "hsaco.bin"))
     header = binary.header
 
     #header.identity_class = ELF.ELF_CLASS.CLASS64
@@ -880,10 +880,12 @@ if __name__ == '__main__':
     #data_sec.size = len(data)
     #data_sec.content = data
 
+    kernel_meta = kernel_meta_raw["amdhsa.kernels"]
     symtab = {}
 
-
-    for name,kernel in ref_phase.kernels.items():
+    #for name,kernel in ref_phase.kernels.items():
+    for k in kernel_meta:
+        name = k['.name']
         func = ref_phase.functions[name]
         for symbol in binary.symbols:
             if symbol.name.startswith("vector_copy"):
@@ -891,7 +893,7 @@ if __name__ == '__main__':
                 symbol.name = symbol.name.replace("vector_copy", name)
                 symbol.value   = text_section.virtual_address + func.code_pos
                 symbol.size    = func.code_size
-                symtab[name] = symbol
+                symtab[symbol.name] = symbol
         #sym = ELF.Symbol()
         #sym.name    = name
         #sym.type    = ELF.SYMBOL_TYPES.FUNC
@@ -902,11 +904,10 @@ if __name__ == '__main__':
         #symtab[name] = sym
         #binary.add_static_symbol(sym)
 
-    kernel_meta = []
-    kernel_meta = kernel_meta_raw["amdhsa.kernels"]
-    for k in kernel_meta_raw["amdhsa.kernels"]:
+    for k in kernel_meta:
         kname = k['.name']
-        if kname in symtab:
+        if kname + ".kd" in symtab:
+            k['.symbol'] = kname + ".kd"
             pass
         else:
             assert("error")
@@ -923,10 +924,10 @@ if __name__ == '__main__':
     dynamic_entry = ELF.DynamicEntry(ELF.DYNAMIC_TAGS.VERSYM, 7)
     binary.add(dynamic_entry)
 
-    note_name = list(bytes("PPU.Kernels", encoding='utf-8'))
+    note_name = list(bytes("OPU.Kernels", encoding='utf-8'))
     note_meta = [c for c in msgpack.packb([kernel_meta], use_bin_type=True)]
 
-    #note = ELF.Note("PPU.Kernels", ELF.NOTE_TYPES(0x20), note_name)
+    #note = ELF.Note("OPU.Kernels", ELF.NOTE_TYPES(0x20), note_name)
     #binary.add(note)
     #notes = binary.notes
     #notes[0].description = note_meta
