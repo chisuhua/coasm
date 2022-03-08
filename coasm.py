@@ -388,7 +388,7 @@ class VisitType(Enum):
     GEN_INSTR_DEF = 7
 
 
-class Instr(Structure):
+class Instr(LittleEndianStructure):
     _pack_ = 1
     FmtEnc = namedtuple('FmtEnc', ['bit_start', 'width', 'value'])
     fmt_enc = {}
@@ -450,6 +450,8 @@ class Instr(Structure):
         else:
             self.enc = Instr.fmt_enc[self.getFmtName()].value
             self.op = self.OpcodeEnum[name.upper()].value
+            assert(self.enc == Instr.fmt_enc[self.getFmtName()].value)
+            assert(self.op == self.OpcodeEnum[name.upper()].value)
 
 
     def addOperand(self, operand):
@@ -557,7 +559,7 @@ class Instr(Structure):
     def __str__(self):
         if self.instr_str is not None:
             return self.instr_str
-        instr_str = self.name + " "
+        instr_str = self.name.lower() + " "
         #if self.dst_reg is not None:
         #    instr_str += self.dst_reg.__str__()
         for operand in self.operands:
@@ -1295,13 +1297,13 @@ class InstrVMEM_VMUBUF(InstrVmem):
         return self.getInstrDefName() + " vreg ',' vreg ',' sreg ',' sreg"
 
 class InstrVMEM_VLS(InstrVmem):
-    _fields_ = [("offset", c_uint, 8),
+    _fields_ = [("offset", c_uint, 6),
                 ("imm",   c_uint, 1),
                 ("vaddr", c_uint, 6),
                 ("vdata", c_uint, 7),
                 ("slc",   c_uint, 1),
                 ("op",    c_uint, 5),
-                ("enc",   c_uint, 4)]
+                ("enc",   c_uint, 6)]
 
 
     def __init__(self, name=''):

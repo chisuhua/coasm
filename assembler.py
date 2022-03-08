@@ -14,6 +14,7 @@ import lief
 from lief import ELF
 import yaml
 import msgpack
+import binascii
 
 from grammar.CoasmLexer import CoasmLexer
 from grammar.CoasmParser import CoasmParser
@@ -645,7 +646,7 @@ class DefPhase(CoasmListener):
                     self.cur_function.updateLabel(label, self.cur_instr)
                 self.cur_label = []
             self.cur_function.addInstr(self.cur_instr);
-            self.cur_instr.name = self.cur_function.name
+            #self.cur_instr.name = self.cur_function.name
             self.cur_instr = None
 
     def exitAlu_expr_list(self, ctx:CoasmParser.Alu_expr_listContext):
@@ -777,6 +778,7 @@ class RefPhase(CoasmListener):
                 instr_code = instr.genInstrAsm()
                 for i in range(0, len(instr_code)):
                     code.append(instr_code[i])
+                print("{} : {}".format(binascii.b2a_hex(instr_code), instr))
             func.code_size = len(code) - func.code_pos
 
 

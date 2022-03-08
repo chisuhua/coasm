@@ -156,13 +156,13 @@ printf("offset %x ,offen %x ,idxen %x ,glc %x ,addr64 %x ,lds %x ,reserved0 %x ,
 };
 
 struct BytesVLS {
-    uint32_t offset : 8;
+    uint32_t offset : 6;
     uint32_t imm : 1;
     uint32_t vaddr : 6;
     uint32_t vdata : 7;
     uint32_t slc : 1;
     uint32_t op : 5;
-    uint32_t enc : 4;
+    uint32_t enc : 6;
 };
 void printVLS(BytesVLS bytes) {
 printf("offset %x ,imm %x ,vaddr %x ,vdata %x ,slc %x ,op %x ,enc %x \n", bytes.offset,bytes.imm,bytes.vaddr,bytes.vdata,bytes.slc,bytes.op,bytes.enc);
