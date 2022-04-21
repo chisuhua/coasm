@@ -5,21 +5,21 @@
 	.type	hello,@function
 hello:                                   ; @hello
 ; %bb.0:                                ; %entry
-    v_load_dwordx2 s[0:1], kernel_param_base, 0x0 % mspace:param
-   	v_load_dwordx2 s[2:3], kernel_param_base, 0x2 - mspace:param
+    v_load_dwordx2 s[0:1], param0, 0x0 % mspace:param
+   	v_load_dwordx2 s[2:3], param1, 0x2 - mspace:param
 	v_lshlrev_b32 v0, 2, v0
     s_waitcnt 0
 
 	// v[1:2] = &in1[i]
-	v_add_u32     v1, s0, v0, co:vcc
+	v_add_u32     v1, s0, v0, co:tcc0
    	v_mov_b32     v2, s1
-	v_addc_u32    v2, 0, v2, ci:vcc, co:vcc
+	v_addc_u32    v2, 0, v2, ci:tcc0, co:tcc0
 	flat_load_dword v3, v[1:2] // v3 = in1[i]
 
 	// v[0:1] = &out[i]
-	v_add_u32     v0, s2, v0, co:vcc
+	v_add_u32     v0, s2, v0, co:tcc0
 	v_mov_b32     v1, s3
-	v_addc_u32    v1, 0, v1, ci:vcc, co:vcc
+	v_addc_u32    v1, 0, v1, ci:tcc0, co:tcc0
 
 	s_waitcnt     0
 
@@ -47,7 +47,7 @@ hello:                                   ; @hello
 		.system_vgpr_workitem_id 0
 		.next_free_vgpr 3
 		.next_free_sgpr 8
-		.reserve_vcc 0
+		.reserve_tcc0 0
 		.reserve_flat_scratch 0
 		.float_round_mode_32 0
 		.float_round_mode_16_64 0
@@ -96,17 +96,17 @@ hello:                                   ; @hello
 amdhsa.kernels:
   - .args:
       - .address_space:  global
-        .name:           r
+        .name:           param0
         .offset:         0
         .size:           8
         .value_kind:     global_buffer
       - .address_space:  global
-        .name:           a
+        .name:           param1
         .offset:         8
         .size:           8
         .value_kind:     global_buffer
       - .address_space:  global
-        .name:           b
+        .name:           param2
         .offset:         16
         .size:           8
         .value_kind:     global_buffer

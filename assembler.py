@@ -76,17 +76,25 @@ class Kernel(KernelSymbol):
         self.mode = 0
         self.stack = 0
         self.alias_reg = {}
+        # TODO id_stype is record label, ...
         self.id_stype = {}
         self.input_user_sreg_num = 0
         self.control = {}
+        self.control['param_global_base_en'] = 0
         self.control['grid_dim_x_en'] = 0
         self.control['grid_dim_y_en'] = 0
         self.control['grid_dim_z_en'] = 0
-        self.control['block_dim_en'] = 0
+        #self.control['block_dim_en'] = 0
+        self.control['block_dim_x_en'] = 0
+        self.control['block_dim_y_en'] = 0
+        self.control['block_dim_z_en'] = 0
         self.control['block_idx_x_en'] = 0
         self.control['block_idx_y_en'] = 0
         self.control['block_idx_z_en'] = 0
-        self.control['start_thread_idx_en'] = 0
+        #self.control['start_thread_idx_en'] = 0
+        self.control['thread_idx_x_en'] = 0
+        self.control['thread_idx_y_en'] = 0
+        self.control['thread_idx_z_en'] = 0
         self.control['user_sreg_num'] = 0
         self.control['vload_in_order'] = 0
         self.control['vstore_in_order'] = 0
@@ -105,11 +113,25 @@ class Kernel(KernelSymbol):
         self.resource = {}
         self.resource['vreg_number'] = 0
         self.resource['sreg_number'] = 0
+        self.resource['dreg_number'] = 0
+        self.resource['tcc_number'] = 0
         self.resource['smem_size'] = 0
         self.resource['stack_size'] = 0
+        self.unresolved_instr = []
+
+    def isbuiltinEnable(self, name):
+        name = name + '_en'
+        if name in self.control:
+            return self.control[name]
+        else:
+            assert("can't find the builtin name  {}".format(name))
 
     def addArg(self, arg: KernelArg):
         self.args[arg.name] = arg
+
+    def getArg(self, arg_name):
+        assert(arg_name in self.args)
+        return self.args[arg_name]
 
     def addAliasReg(self, alias_name, reg: Reg):
         self.alias_reg[alias_name] = reg
@@ -540,6 +562,7 @@ class DefPhase(CoasmListener):
         # parse number for Instr
         elif self.cur_instr is not None:
             num, valid = parseNumber(ctx.start, DataType('i32'))
+            #pdb.set_trace()
             self.cur_instr.addOperand(num)
 
     def exitSreg(self, ctx:CoasmParser.SregContext):
@@ -556,10 +579,21 @@ class DefPhase(CoasmListener):
         reg = Reg(ctx.getText())
         self.cur_instr.addReg(reg)
         pass
-
+    # special operand which is operand_type:special_reg
     def exitSpecial_operand(self, ctx:CoasmParser.Special_operandContext):
         operand_type, reg_str = ctx.getText().split(":")
-        self.cur_instr.addSpecialOperand(operand_type, reg_str)
+        self.cur_instr.addSpecialOperand(UnresolvedReg.get_kind(operand_type), reg_str)
+        pass
+
+    def exitSpecial_cc_reg(self, ctx:CoasmParser.Special_cc_regContext):
+        self.cur_instr.addSpecialCCReg(ctx.getText())
+
+    def exitBuiltin_operand(self, ctx:CoasmParser.Builtin_operandContext):
+        self.cur_instr.addBuiltinOperand(ctx.getText())
+
+    # Exit a parse tree produced by CoasmParser#vmem_special_operand.
+    def exitVmem_special_operand(self, ctx:CoasmParser.Vmem_special_operandContext):
+        self.cur_instr.addSpecialOperand(ctx.getText())
         pass
 
     # Exit a parse tree produced by CoasmParser#op_mspace.
@@ -706,6 +740,8 @@ class RefPhase(CoasmListener):
                 for operand in instr.operands:
                     if isinstance(operand, Reg):
                         reg = operand
+                    elif isinstance(operand, UnresolvedReg):
+                        instr.unresolved = True
                     elif not isinstance(operand, int):
                         if operand in self.id_stype:
                             stype = self.id_stype[operand]
@@ -730,48 +766,270 @@ class RefPhase(CoasmListener):
                 print("ERROR: kernel " + kernel_name + " is not in funtions")
             func = self.functions[kernel_name]
             print("process kernel_name {}".format(kernel_name))
-            sreg_usage = {}
-            vreg_usage = {}
             max_sreg = -1
             max_vreg = -1
+            max_dreg = -1
+            max_tcc = -1
+
+            # NOTE: reg is start with builtin reg
+            sreg_builtin_idx = -1 + MAX_RESERVED_SREG_NUM  # the start sreg index , it is kernel builtin before this idx
+            vreg_builtin_idx = -1  # the start vreg index , it is thread builtin before this idx
+            dreg_builtin_idx = -1  # the start dreg index , it is block builtin before this idx
+
+            # collect unresolved instr
             for instr in func.instrs:
-                for reg in instr.regs:
-                    print("process reg {}, reg.idx={}, reg.end_idx={}".format(reg, reg.idx, reg.end_idx))
-                    for idx in range(reg.idx, reg.end_idx):
-                        if reg.rtype is Reg.RegType.Scalar:
-                            sreg_usage[idx] = True
-                            if idx <= MAX_USER_SREG_NUM and idx > max_sreg:
-                                max_sreg = idx
+                print("process instr {}".format(instr.name))
+                if instr.unresolved:
+                    kernel.unresolved_instr.append(instr)
+            # update built reg num
+            # step1. update kernel.control if asm user builtin not define in meta
+            for instr in kernel.unresolved_instr:
+                print("process unresolve instr {}".format(instr))
+                for operand in instr.operands:
+                    if not isinstance(operand, UnresolvedReg):
+                        continue
+                    if operand.type is UnresolvedReg.Kind.param:
+                        kernel.addControl("param_global_base_en", 1)
+                    elif operand.type is UnresolvedReg.Kind.builtin:
+                        builtin_reg = SpecialREG.get_builtin_reg(operand.name)
+                        kernel.addControl(operand.name +"_en", 1)
+                    print("unresolve operand {} {}".format(operand.type, operand.name))
+
+            def get_reg_index(index, size):
+                if size == 1:
+                    return index + 1, "{}".format(index+1)
+                elif size == 2:
+                    return index + 2, "[{}:{}]".format(index+1, index+2)
+                else:
+                    assert("unknow size in get_reg_index")
+
+            # step2. assign the built sreg num
+            builtin_reg = {}
+            for reg in SpecialREG.builtin_reg:
+                if reg.is_builtin and kernel.isbuiltinEnable(reg.name):
+                    if reg.kind == SpecialREG.Kind.BUILTIN_THREAD:
+                        vreg_builtin_idx, idx_str = get_reg_index(vreg_builtin_idx, reg.reg_size)
+                        builtin_reg[reg.name] = "v{}".format(idx_str)
+                        print("unresolve builtin {} is assigned to {}".format(reg.name, vreg_builtin_idx))
+                    elif reg.kind == SpecialREG.Kind.BUILTIN_BLOCK:
+                        dreg_builtin_idx, idx_str = get_reg_index(dreg_builtin_idx, reg.reg_size)
+                        builtin_reg[reg.name] = "d{}".format(idx_str)
+                        print("unresolve builtin {} is assigned to {}".format(reg.name, dreg_builtin_idx))
+                    elif reg.kind == SpecialREG.Kind.BUILTIN_KERNEL:
+                        sreg_builtin_idx, idx_str = get_reg_index(sreg_builtin_idx, reg.reg_size)
+                        builtin_reg[reg.name] = "s{}".format(idx_str)
+                        print("unresolve builtin {} is assigned to {}".format(reg.name, sreg_builtin_idx))
+                    else:
+                        assert("unknown reg kind {}".format(reg.kind))
+
+            # step3. upate unresolve regs
+            for instr in kernel.unresolved_instr:
+                for i, operand in enumerate(instr.operands):
+                    if not isinstance(operand, UnresolvedReg):
+                        continue
+                    operand_num = i + 1
+                    if operand.type is UnresolvedReg.Kind.param:
+                        arg = kernel.getArg(operand.name)
+                        solved_operand = Reg(builtin_reg["param_global_base"])
+                        instr.operands[i] = solved_operand
+                        instr.updateOperand(operand_num)
+                        instr.addOperand(arg.offset)
+                    elif operand.type is UnresolvedReg.Kind.builtin:
+                        solved_operand = Reg(builtin_reg[operand.name])
+                        instr.operands[i] = solved_operand
+                        instr.updateOperand(operand_num)
+
+            sreg_num = sreg_builtin_idx
+            vreg_num = vreg_builtin_idx
+            dreg_num = dreg_builtin_idx
+            tcc_num = -1
+
+            sreg_usage = {}
+            vreg_usage = {}
+            dreg_usage = {}
+            tcc_usage = {}
+            free_vreg = [[vreg_num+1, MAX_VREG_NUM]]
+            free_sreg = [[sreg_num+1, MAX_SREG_NUM]]
+            free_dreg = [[dreg_num+1, MAX_DREG_NUM]]
+            free_tcc = [[tcc_num+1, MAX_TCC_NUM]]
+
+            def findFree(free, size):
+                fit_align = [[],[]]
+                fit_notalign = [[],[]]
+                for i, f in enumerate(free):
+                    s = f[0]
+                    e = f[1]
+                    is_align = True if (int(s / size) * size) == s  else False
+                    is_fit = True if (e - s + 1) >= size else False
+                    if is_align and is_fit:
+                        fit_align[0].append(e-s +1)
+                        fit_align[1].append(i)
+                    elif not is_align and is_fit:
+                        fit_notalign[0].append(e-s + 1)
+                        fit_notalign[1].append(i)
+                found = -1
+                if len(fit_align[0]) > 0:
+                    min_fit = fit_align[0].index(min(fit_align[0]))
+                    index = fit_align[1][min_fit]
+                    found = free[index][0]
+                    if (free[index][1] - free[index][0] + 1) == size:
+                        del free[index]
+                    else:
+                        free[index][0] = free[index][0] + size
+                elif len(fit_notalign[0]) > 0:
+                    min_fit = fit_notalign[0].index(min(fit_notalign[0]))
+                    index = fit_notalign[1][min_fit]
+                    #pdb.set_trace()
+                    s_old = free[index][0]
+                    s_new = int((s_old + size - 1) / size) * size
+                    new_node = [s_old, s_new - 1]
+                    found = s_new
+                    if (free[index][1] - s_new + 1) == size:
+                        del free[index]
+                    else:
+                        free[index][0] = s_new + size
+                    free.append(new_node)
+                else:
+                    assert("find free reg failed")
+                return found
+
+
+            def assignReg(reg : Reg, usage, free):
+                if reg.idx not in usage:
+                    size = reg.end_idx - reg.idx + 1
+                    new_idx = findFree(free, size)
+                    old_idx = reg.idx
+                    assert(new_idx != -1)
+                    reg.idx = new_idx
+                    #print("assign old reg.idx {} to new {}".format(old_idx, new_idx))
+                    for idx in range(old_idx, reg.end_idx +1):
+                        assert(idx not in usage)
+                        #print("usage udpate: idx {}, new_idx {}".format(idx, new_idx))
+                        usage[idx] = new_idx
+                        new_idx += 1
+                    #print("assign old reg.end_idx {} to new {}".format(reg.end_idx, new_idx - 1))
+                    reg.end_idx = new_idx - 1
+                else:
+                    for idx in range(reg.idx, reg.end_idx + 1):
+                        assert(idx in usage)
+
+            # remapping regnumber
+            for instr in func.instrs:
+                print("process instr {}".format(instr.name))
+                for i, reg in enumerate(instr.regs):
+                    #print("process reg {}, reg.idx={}, reg.end_idx={}".format(reg, reg.idx, reg.end_idx))
+                    assert(isinstance(reg, Reg))
+                    if reg.rtype is Reg.RegType.Scalar:
+                        #print("\nbefore: scalr reg idx {}, {}".format(reg.idx, reg.end_idx))
+                        assignReg(reg, sreg_usage, free_sreg)
+                        #print("after: scalr reg idx {}, {}".format(reg.idx, reg.end_idx))
+                        #print("after: scalr usage {}, free {}".format(sreg_usage, free_sreg))
+                    elif reg.rtype is Reg.RegType.Vector:
+                        #print("\nbefore: vreg reg idx {}, {}".format(reg.idx, reg.end_idx))
+                        assignReg(reg, vreg_usage, free_vreg)
+                        #print("after: vreg reg idx {}, {}".format(reg.idx, reg.end_idx))
+                        #print("after: vreg usage {}, free {}".format(vreg_usage, free_vreg))
+                    elif reg.rtype is Reg.RegType.Data:
+                        assignReg(reg, dreg_usage, free_dreg)
+                    elif reg.rtype is Reg.RegType.TCC:
+                        assignReg(reg, tcc_usage, free_tcc)
+                    else:
+                        assert("RegType is incorrect {}".format(reg.rtype))
+                    continue
+                    if reg.rtype is Reg.RegType.Scalar:
+                        if reg.idx not in sreg_usage:
+                            new_idx = sreg_num + 1
+                            for idx in range(reg.idx, reg.end_idx):
+                                assert(idx not in sreg_usage)
+                                sreg_num += 1
+                                sreg_usage[idx] = sreg_num
+                            new_end_idx = sreg_num
+                            reg.idx = new_idx
+                            reg.end_idx = new_end_idx
                         else:
-                            vreg_usage[idx] = True
-                            if idx <= MAX_VREG_NUM and idx > max_vreg:
-                                max_vreg = idx
+                            for idx in range(reg.idx, reg.end_idx):
+                                assert(idx in sreg_usage)
+                    elif reg.rtype is Reg.RegType.Vector:
+                        if reg.idx not in vreg_usage:
+                            new_idx = vreg_num + 1
+                            pdb.set_trace()
+                            for idx in range(reg.idx, reg.end_idx):
+                                assert(idx not in vreg_usage)
+                                vreg_num += 1
+                                vreg_usage[idx] = vreg_num
+                            new_end_idx = vreg_num
+                            reg.idx = new_idx
+                            reg.end_idx = new_end_idx
+                        else:
+                            for idx in range(reg.idx, reg.end_idx):
+                                assert(idx in vreg_usage)
+                    elif reg.rtype is Reg.RegType.Data:
+                        if reg.idx not in dreg_usage:
+                            new_idx = dreg_num + 1
+                            for idx in range(reg.idx, reg.end_idx):
+                                assert(idx not in dreg_usage)
+                                dreg_num += 1
+                                dreg_usage[idx] = dreg_num
+                            new_end_idx = dreg_num
+                            reg.idx = new_idx
+                            reg.end_idx = new_end_idx
+                        else:
+                            for idx in range(reg.idx, reg.end_idx):
+                                assert(idx in dreg_usage)
+                    elif reg.rtype is Reg.RegType.TCC:
+                        if reg.idx not in tcc_usage:
+                            new_idx = tcc_num + 1
+                            for idx in range(reg.idx, reg.end_idx):
+                                assert(idx not in tcc_usage)
+                                tcc_num += 1
+                                tcc_usage[idx] = tcc_num
+                            new_end_idx = tcc_num
+                            reg.idx = new_idx
+                            reg.end_idx = new_end_idx
+                        else:
+                            for idx in range(reg.idx, reg.end_idx):
+                                assert(idx in tcc_usage)
+                    else:
+                        assert("RegType is incorrect {}".format(reg.rtype))
+
+            for instr in func.instrs:
+                for i, operand in enumerate(instr.operands):
+                    operand_num = i + 1
+                    instr.updateOperand(operand_num)
+
+            tcc_num = max_tcc # + 1    # add vcc
+            tcc_num = int((tcc_num + 1) / 2) * 2
+
             input_sreg_num = kernel.resource["sreg_number"]
-            sreg_num = max_sreg + 1 + 1   # add vcc
-            sreg_num = (sreg_num + 7 ) / 8    # align to 8
+            sreg_num = int((sreg_num + 7 ) / 8)*8    # align to 8
+            sreg_num += tcc_num
             if kernel.mode["trap_en"]:
                 sreg_num += 16
             if input_sreg_num == 0:
                 kernel.resource["sreg_number"] = sreg_num
-            elif input_sreg_num != sreg_num:
+            elif input_sreg_num < sreg_num:
                 print("WARN: kernel {} set sreg_number to {}, recommended value = {}".format(kernel_name, input_sreg_num, sreg_num))
+                kernel.resource["sreg_number"] = sreg_num
+            max_sreg = sreg_num
+
             input_vreg_num = kernel.resource["vreg_number"]
-            vreg_num = max_vreg + 1    # add vcc
-            vreg_num = (vreg_num + 1) / 2
+            max_vreg = int((vreg_num + 1) / 2) * 2
             if input_vreg_num == 0:
                 kernel.resource["vreg_number"] = vreg_num
-            elif input_vreg_num != vreg_num:
+            elif input_vreg_num < vreg_num:
                 print("WARN: kernel {} set vreg_number to {}, recommended value = {}".format(kernel_name, input_vreg_num, vreg_num))
+                kernel.resource["vreg_number"] = vreg_num
+            max_vreg = vreg_num
+
             input_smem_size = kernel.resource["smem_size"]
             smem_size = (self.memsize["shared"] + 127) / 128
             if input_smem_size == 0:
                 kernel.resource["smem_size"] = smem_size
             elif input_smem_size != smem_size:
                 print("WARN: kernel {} set smem_size to {}, recommended value = {}".format(kernel_name, input_smem_size, smem_size))
-            info(ctx.start, "Exit Prog End")
-        for instr in self.unresolved_instr:
-            print("instr {} is unresolved".format(self.unresolved_instr))
+            max_dreg = int((dreg_num + 1) / 2) * 2
 
+            info(ctx.start, "Exit Prog End")
         for func_name, func in self.functions.items():
             func.code_pos = len(code)
             for instr in func.instrs:
@@ -786,19 +1044,19 @@ class RefPhase(CoasmListener):
 is_kernel_option = False;
 is_kernel_meta = False;
 
-# FIXM to use kernel_meta
+# FIXME
 def fixSpecialRegALias(line):
-    line = line.replace("kernel_param_base", "d[0:1]")
-    line = line.replace("block_dim_x", "d2")
-    line = line.replace("block_dim_y", "d3")
-    line = line.replace("block_dim_z", "d4")
-    line = line.replace("block_idx_x", "d5")
-    line = line.replace("block_idx_y", "d6")
-    line = line.replace("block_idx_z", "d6")
-    line = line.replace("thread_idx_x", "v0")
-    line = line.replace("thread_idx_y", "v1")
-    line = line.replace("thread_idx_z", "v2")
-    line = line.replace("tcc", "s10")
+    #line = line.replace("kernel_param_base", "d[0:1]")
+    #line = line.replace("block_dim_x", "d2")
+    #line = line.replace("block_dim_y", "d3")
+    #line = line.replace("block_dim_z", "d4")
+    #line = line.replace("block_idx_x", "d5")
+    #line = line.replace("block_idx_y", "d6")
+    #line = line.replace("block_idx_z", "d6")
+    #line = line.replace("thread_idx_x", "v0")
+    #line = line.replace("thread_idx_y", "v1")
+    #line = line.replace("thread_idx_z", "v2")
+    #line = line.replace("tcc", "s10")
     return line
 
 if __name__ == '__main__':
@@ -827,6 +1085,32 @@ if __name__ == '__main__':
             asm_input.append(fixSpecialRegALias(line))
 
     kernel_meta_raw = yaml.load("".join(metas))
+    kernel_meta = kernel_meta_raw["opu.kernels"]
+
+    kernels = {}
+    for k in kernel_meta:
+        name = k['.name']
+        kernel = Kernel(name)
+        kernels[name] = kernel
+        for a in k['.args']:
+            arg = KernelArg(a['.name'])
+            arg.offset = a['.offset']
+            arg.size = a['.size']
+            # FIXME use address_space to setup kind
+            if a['.value_kind'] == 'global_buffer':
+                arg.kind = ArgSymbol.Kind.SREG_PTR
+            else:
+                arg.kind = ArgSymbol.Kind.SREG_VALUE
+            kernel.addArg(arg)
+        kernel_ctrl = k['.kernel_ctrl']
+        #for bit, ctrl in SpecialREG.kernelctrlbit.items():
+        for builtin_reg in SpecialREG.builtin_reg:
+            if not isinstance(builtin_reg.ctrl_bit, int):
+                continue
+            bit = builtin_reg.ctrl_bit
+            if ((kernel_ctrl >> bit) & 0x01) == 0x1:
+                kernel.addControl(builtin_reg.name + "_en", 1)
+
     input_stream = InputStream("".join(asm_input))
 
     lexer = CoasmLexer(input_stream)
@@ -849,12 +1133,26 @@ if __name__ == '__main__':
     #ref_phase = RefPhase(def_phase.globals, def_phase.scopes)
     ref_phase = RefPhase(def_phase.globals, def_phase.scopes, \
             def_phase.id_stype, \
-            def_phase.kernels,  \
+            kernels,  \
             def_phase.functions, \
             def_phase.variables, \
             def_phase.memsize, \
             def_phase.unresolved_instr)
     walker.walk(ref_phase, tree)
+
+    # update kernel_ctrl from kernel.control
+    for k in kernel_meta:
+        name = k['.name']
+        kernel = Kernel(name)
+        kernel_ctrl = k['.kernel_ctrl']
+        print("before update kernel_ctl {}".format(kernel_ctrl))
+        for reg in SpecialREG.builtin_reg:
+            if not isinstance(builtin_reg.ctrl_bit, int):
+                continue
+            if reg.is_builtin and kernel.isbuiltinEnable(reg.name):
+                bit = 0x1 << reg.ctrl_bit
+                k['.kernel_ctrl'] =  kernel_ctrl | bit
+        print("after update kernel_ctl {}".format(k['.kernel_ctrl']))
 
     #binary = lief.parse("hello_elf.bin")
     binary = lief.parse(os.path.join(os.path.split(os.path.abspath(__file__))[0], "hsaco.bin"))
@@ -882,7 +1180,6 @@ if __name__ == '__main__':
     #data_sec.size = len(data)
     #data_sec.content = data
 
-    kernel_meta = kernel_meta_raw["amdhsa.kernels"]
     symtab = {}
 
     #for name,kernel in ref_phase.kernels.items():

@@ -6,8 +6,11 @@ from ctypes import *
 import pdb
 
 MAX_SREG_NUM = 255
+MAX_RESERVED_SREG_NUM = 4
 MAX_USER_SREG_NUM = 220
 MAX_VREG_NUM = 255
+MAX_DREG_NUM = 255
+MAX_TCC_NUM = 16
 
 def utilReplace(str):
     str = str.replace('_', "'_'")
@@ -21,19 +24,6 @@ def utilReplace(str):
     return str
 
 
-class SpecialREG(Enum):
-    SREG_VCC = 0xdf
-    SREG_TREG0  = 0xe0
-    SREG_TREG15 = 0xef
-    HWREG_EMSK  = 0xf0
-    HWREG_SCC   = 0xf1
-    HWREG_X0    = 0xf2
-    HWREG_MODE  = 0xf3
-    HWREG_STATUS = 0xf4
-    HWREG_VCB   = 0xf5
-    LTID        = 0xfe
-    ISREG       = 0xff
-    IVREG       = 0xff
 
 #SpecialRegAlias = {"vcc":SREG_VCC}
 
@@ -282,7 +272,12 @@ class Reg(VariableSymbol):
         Scalar         = 0
         Vector         = 1
         Data           = 2
-    def __init__(self, reg_str):
+        #Param          = 3  # Param
+        TCC            = 4  # thread condition code
+        #BUILTIN_SREG   = 5  # builtin register
+        #BUILTIN_VREG   = 6  # builtin register
+    def __init__(self, reg_str, operand_type=None):
+        self.operand_type = operand_type
         self.is_neg = False
         self.reg_name = None
         self.idx = None
@@ -291,11 +286,30 @@ class Reg(VariableSymbol):
         print("INFO: reg str:" + reg_str)
         if len(reg_str) == 0:
             assert("Reg is null str")
+        if reg_str == '':
+            pdb.set_trace()
         if reg_str[0] == '-' or reg_str[0] == '!':
             self.is_neg = True
             start_pos = 1
         reg_str = reg_str[start_pos:]
         super().__init__(reg_str)
+        #pdb.set_trace()
+        #if reg_str.find("param_") >= 0:
+        #    self.rtype = Reg.RegType.Param
+        #elif reg_str.find("builtin_sreg") >= 0:
+        #    self.rtype = Reg.RegType.BUILTIN_SREG
+        #elif reg_str.find("builtin_vreg") >= 0:
+        #    self.rtype = Reg.RegType.BUILTIN_VREG
+        if reg_str[0] == "s":
+            self.rtype = Reg.RegType.Scalar
+        elif reg_str[0] == "v":
+            self.rtype = Reg.RegType.Vector
+        elif reg_str[0] == "d":
+            self.rtype = Reg.RegType.Data
+        elif reg_str[0] == "t":
+            self.rtype = Reg.RegType.TCC
+        else:
+            assert("invalid reg name")
         idx_pos = reg_str.find("[")
         if idx_pos > 0:
             colon_pos = reg_str.find(":")
@@ -303,10 +317,15 @@ class Reg(VariableSymbol):
             self.reg_name = reg_str[0:idx_pos]
             self.idx = int(reg_str[idx_pos+1:colon_pos])
             self.end_idx = int(reg_str[colon_pos+1:end_idx_pos])
-        else:
-            # here we assume reg name is s|v or s|vreg
+        elif self.rtype == Reg.RegType.Scalar or \
+                self.rtype == Reg.RegType.Vector or \
+                self.rtype == Reg.RegType.Data or self.rtype == Reg.RegType.TCC:
+            # here we assume reg name is s|v|d or s|v|dreg
+            # or like t0/tcc0
             if reg_str[1].isdigit():
                 idx_pos = 1
+            elif reg_str[3].isdigit():
+                idx_pos = 3
             elif reg_str[4].isdigit():
                 idx_pos = 4
             else:
@@ -314,25 +333,96 @@ class Reg(VariableSymbol):
             self.reg_name = reg_str[0:idx_pos]
             self.idx = int(reg_str[idx_pos:])
             self.end_idx = self.idx
-        if reg_str[0] == "s":
-            self.rtype = Reg.RegType.Scalar
-        elif reg_str[0] == "v":
-            self.rtype = Reg.RegType.Vector
-        elif reg_str[0] == "d":
-            self.rtype = Reg.RegType.Data
         else:
-            assert("invalid reg name")
-
+            self.reg_name = reg_str
+            self.idx = 0
         self.alias = None
         self.reloc_type = VariableSymbol.RelocType.Normal
 
     def __str__(self):
-        if self.end_idx is not None:
-            return "{}[{}:{}]".format( "sreg" if self.rtype is Reg.RegType.Scalar else "vreg" if self.rtype is Reg.RegType.Vector else "dreg",
+        if self.end_idx is not None and self.end_idx != self.idx:
+            return "{}[{}:{}]".format( "s" if self.rtype is Reg.RegType.Scalar else "v" if self.rtype is Reg.RegType.Vector else "d",
                     self.idx, self.end_idx)
         else:
-            return "{}{}".format( "sreg" if self.rtype is Reg.RegType.Scalar else "vreg" if self.rtype is Reg.RegType.Vector else "dreg",
+            return "{}{}".format( "s" if self.rtype is Reg.RegType.Scalar else "v" if self.rtype is Reg.RegType.Vector else "d",
                     self.idx)
+
+class SpecialREG:
+    class Kind(Enum):
+        SREG_VCC = 0xdf
+        SREG_TREG0  = 0xe0
+        SREG_TREG15 = 0xef
+        HWREG_EMSK  = 0xf0
+        HWREG_SCC   = 0xf1
+        HWREG_X0    = 0xf2
+        HWREG_MODE  = 0xf3
+        HWREG_STATUS = 0xf4
+        HWREG_VCB   = 0xf5
+        LTID        = 0xfe
+        ISREG       = 0xff
+        IVREG       = 0xff
+        BUILTIN_THREAD = 0
+        BUILTIN_BLOCK  = 1
+        BUILTIN_KERNEL = 2
+        
+    #special_reg['m0'] = SpecialReg("RegisterM0", Reg('s124'))
+    #special_reg['vcc'] = SpecialReg("RegisterVcc", Reg('s106'))
+    #special_reg['vccz'] = SpecialReg("RegisterVcc", Reg('s251'))
+    #special_reg['exec'] = SpecialReg("RegisterVcc", Reg('s126'))
+    #special_reg['execz'] = SpecialReg("RegisterVcc", Reg('s252'))
+    #special_reg['scc'] = SpecialReg("RegisterVcc", Reg('s253'))
+    # the reg_size is 4B as unit
+    BuiltinReg = namedtuple('BuiltinReg', ['name', 'is_builtin', 'kind', 'reg_size', 'ctrl_bit'])
+    builtin_reg = []
+    builtin_reg.append(BuiltinReg("param_global_base", True, Kind.BUILTIN_KERNEL, 2, 0))
+    builtin_reg.append(BuiltinReg("grid_dim_x", True, Kind.BUILTIN_KERNEL, 1, 4))
+    builtin_reg.append(BuiltinReg("grid_dim_y", True, Kind.BUILTIN_KERNEL, 1,5))
+    builtin_reg.append(BuiltinReg("grid_dim_z", True, Kind.BUILTIN_KERNEL, 1,6))
+    builtin_reg.append(BuiltinReg("block_dim_x", True, Kind.BUILTIN_KERNEL, 1,7))
+    builtin_reg.append(BuiltinReg("block_dim_y", True, Kind.BUILTIN_KERNEL, 1,8))
+    builtin_reg.append(BuiltinReg("block_dim_z", True, Kind.BUILTIN_KERNEL, 1,9))
+    builtin_reg.append(BuiltinReg("block_idx_x", True, Kind.BUILTIN_BLOCK, 1,12))
+    builtin_reg.append(BuiltinReg("block_idx_y", True, Kind.BUILTIN_BLOCK, 1,13))
+    builtin_reg.append(BuiltinReg("block_idx_z", True, Kind.BUILTIN_BLOCK, 1,14))
+    builtin_reg.append(BuiltinReg("thread_idx_x", True, Kind.BUILTIN_THREAD, 1,16))
+    builtin_reg.append(BuiltinReg("thread_idx_y", True, Kind.BUILTIN_THREAD, 1,17))
+    builtin_reg.append(BuiltinReg("thread_idx_z", True, Kind.BUILTIN_THREAD, 1,18))
+    @classmethod
+    def get_builtin_reg(cls, name):
+        for reg in cls.builtin_reg:
+            if reg.is_builtin and name == reg.name:
+                return reg
+        assert("can't find the builtin reg {} ".format(name))
+
+class UnresolvedReg:
+    class Kind(Enum):
+        ci = 0
+        co = 1
+        param = 2
+        pred = 3
+        tcc = 4
+        builtin = 5
+    def __init__(self, operand_type, name):
+        self.type = operand_type
+        self.name = name
+    @classmethod
+    def get_kind(cls, operand_type):
+        assert(isinstance(operand_type, str))
+        if operand_type == "ci":
+            return Kind.ci
+        elif operand_type == "co":
+            return Kind.co
+        elif operand_type == "param":
+            return Kind.param
+        elif operand_type == "pred":
+            return Kind.pred
+        elif operand_type == "tcc":
+            return Kind.tcc
+        elif operand_type == "builtin":
+            return Kind.builtin
+        else:
+            assert("unknown opernad type {}".format(operand_type))
+
 
 class LabelSymbol(Symbol):
     def __init__(self, name):
@@ -387,13 +477,24 @@ class VisitType(Enum):
     GEN_INSTR_OP_ENUM_DEF = 6
     GEN_INSTR_DEF = 7
 
+# to compatiable RISCV isa encoding, we avoid using RISCV enc field:
+#   32bit 11
+#   48bit 111110
+#   64bit 1111110
+# and use similar rd/rs field,  and extend rd/rs field in next 32bit
+# but below is just temperaly to ,and will adjust after merge riscv encoding
 
+# EXT enc is a way to add more 32bit to next instruction.
+#    the EXT 32bit 's decoding is depend on next instruction enc
 class Instr(LittleEndianStructure):
     _pack_ = 1
     FmtEnc = namedtuple('FmtEnc', ['bit_start', 'width', 'value'])
     fmt_enc = {}
-    fmt_enc["VOP2"] = FmtEnc(31, 1, 0b0)
-    fmt_enc["SOP2"] = FmtEnc(31, 2, 0b11)
+    fmt_enc["VOP2"] = FmtEnc(31, 2, 0b00)
+    fmt_enc["EXT1"] = FmtEnc(31, 4, 0b0100)
+    fmt_enc["EXT2"] = FmtEnc(31, 4, 0b0101)
+    fmt_enc["EXT3"] = FmtEnc(31, 4, 0b0111)
+    fmt_enc["SOP2"] = FmtEnc(31, 4, 0b0110)
     fmt_enc["SOPK"] = FmtEnc(31, 4, 0b1001)
     fmt_enc["SLS"] =  FmtEnc(31, 4, 0b1011)
     fmt_enc["VSMRD"] =FmtEnc(31, 5, 0b100010)
@@ -407,15 +508,6 @@ class Instr(LittleEndianStructure):
     fmt_enc["SOPC"] = FmtEnc(31, 9, 0b101010000)
     fmt_enc["SOPP"] = FmtEnc(31, 9, 0b101010001)
     fmt_enc["SOP1"] = FmtEnc(31, 9, 0b101010010)
-
-    SpecialReg = namedtuple('SpecialReg', ['name', 'reg'])
-    special_reg = {}
-    special_reg['m0'] = SpecialReg("RegisterM0", Reg('s124'))
-    special_reg['vcc'] = SpecialReg("RegisterVcc", Reg('s106'))
-    special_reg['vccz'] = SpecialReg("RegisterVcc", Reg('s251'))
-    special_reg['exec'] = SpecialReg("RegisterVcc", Reg('s126'))
-    special_reg['execz'] = SpecialReg("RegisterVcc", Reg('s252'))
-    special_reg['scc'] = SpecialReg("RegisterVcc", Reg('s253'))
 
     def __init__(self, name=''):
         #super().__init__(name)
@@ -434,7 +526,8 @@ class Instr(LittleEndianStructure):
         self.stride_pos = 0
         self.regs = []
         self.operands = []
-        self.special_operands = {}
+        #self.special_operands = {} #ci/co/param/tcc/builtin/pred is keys, value is Reg or regstr
+        self.unresolved = False # unresolved operand is raw str
         self.dst_reg = None
         self.name = name       # in fact it is line number
         self.instr_str = None
@@ -459,6 +552,10 @@ class Instr(LittleEndianStructure):
             self.setImm(operand)
         self.operands.append(operand)
 
+    def addUnresolvedOperand(self, operand_type, reg_str):
+        assert(isinstance(reg_str, str))
+        self.operands.append(UnresolvedReg(operand_type, reg_str))
+        self.unresolved = True
 
     def addReg(self, reg: Reg):
         if self.dst_reg is None:
@@ -468,12 +565,14 @@ class Instr(LittleEndianStructure):
 
     # for vcc etc.
     def addSpecialOperand(self, operand_type, reg_str):
-        if reg_str in Instr.special_reg.keys():
-            self.regs.append(Instr.special_reg[reg_str].reg)
-            self.special_operands[operand_type] = Instr.special_reg[reg_str].reg
-        else:
-            self.special_operands[operand_type] = Reg(reg_str)
-        return self.special_operands[operand_type]
+        #pdb.set_trace()
+        #if reg_str in SpecialREG.special_reg.keys():
+        #    #self.regs.append(SpecialREG.special_reg[reg_str].reg)
+        #    self.special_operands[operand_type] = SpecialREG.special_reg[reg_str].reg
+        #else:
+        #    self.special_operands[operand_type] = Reg(reg_str)
+        self.addUnresolvedOperand(operand_type, reg_str)
+        #return self.special_operands[operand_type]
 
     def setImm(self, imm):
         self.imm = imm
@@ -645,13 +744,14 @@ class InstrDmem(Instr):
 
 #------------------------------
 class InstrVALU_VOP2(InstrValu):
-    _fields_ = [("src0", c_uint, 8),
+    _fields_ = [
+                ("lit_const", c_uint, 4),
+                ("src0", c_uint, 6),
                 ("ssrc0_", c_uint, 1),
-                ("vsrc1", c_uint, 8),
-                ("vdst", c_uint, 8),
-                ("op", c_uint, 6),
-                ("enc", c_uint, 1),
-                ("lit_const", c_uint, 32)]
+                ("vsrc1", c_uint, 6),
+                ("vdst", c_uint, 6),
+                ("op", c_uint, 7),
+                ("enc", c_uint, 2)]
 
     def __init__(self, name=''):
         super().__init__(name)
@@ -663,10 +763,11 @@ class InstrVALU_VOP2(InstrValu):
         V_SUBREV_F32               = 0x4
         V_MUL_F32                  = 0x5
         V_MUL_I32_I24              = 0x6
-        V_MIN_F32                  = 0x7
-        V_MAX_F32                  = 0x8
-        V_MIN_I32                  = 0x9
-        V_MAX_I32                  = 0x10
+        V_MULLO_I32_I32            = 0x7
+        V_MIN_F32                  = 0xa
+        V_MAX_F32                  = 0xb
+        V_MIN_I32                  = 0xc
+        V_MAX_I32                  = 0xd
         V_MIN_U32                  = 0x11
         V_MAX_U32                  = 0x12
         V_LSHRREV_B32              = 0x13
@@ -679,7 +780,7 @@ class InstrVALU_VOP2(InstrValu):
         V_BFM_B32                  = 0x20
         V_MAC_F32                  = 0x21
         V_MADMK_F32                = 0x22
-        V_ADD_I32                  = 0x23
+        V_ADD_I32_I32              = 0x23
         V_SUB_I32                  = 0x24
         V_SUBREV_I32               = 0x25
         V_ADD_U32                  = 0x26
@@ -693,10 +794,17 @@ class InstrVALU_VOP2(InstrValu):
 
     def addOperand(self, operand):
         super().addOperand(operand)
-        if len(self.operands) == 1:
+        if isinstance(operand, str):
+            self.unresolved = True
+            return
+        self.updateOperand(len(self.operands))
+
+    def updateOperand(self, operand_num):
+        operand = self.operands[operand_num-1]
+        if operand_num == 1:
             assert(isinstance(operand, Reg))
             self.vdst = operand.idx
-        elif len(self.operands) == 2:
+        elif operand_num == 2:
             if isinstance(operand, int):
                 self.lit_const = operand
                 self.src0 = 0xFF
@@ -706,7 +814,7 @@ class InstrVALU_VOP2(InstrValu):
                 self.ssrc0_ = 1
             else:
                 self.ssrc0_ = 0
-        elif len(self.operands) == 3:
+        elif operand_num == 3:
             assert(isinstance(operand, Reg))
             #if isinstance(operand, int):
             #    self.lit_const = operand
@@ -715,8 +823,10 @@ class InstrVALU_VOP2(InstrValu):
             self.vsrc1 = operand.idx
 
     def addSpecialOperand(self, operand_type, reg_str):
-        assert(operand_type == "co" and reg_str == "vcc")
-        reg = super().addSpecialOperand(operand_type, reg_str)
+        assert(operand_type == UnresolvedReg.Kind.ci and reg_str[0:3] == "tcc")
+        #super().addSpecialOperand(operand_type, reg_str)
+        #reg = super().addSpecialOperand(operand_type, reg_str)
+        self.regs.append(Reg(reg_str, operand_type))
         if (self.op == self.OpcodeEnum.V_ADD_U32.value):
             self.op = self.OpcodeEnum.V_ADDCO_U32.value
 
@@ -729,12 +839,14 @@ class InstrVALU_VOP2(InstrValu):
 
 
 class InstrVALU_VOP1(InstrValu):
-    _fields_ = [("src0", c_uint, 8),
+    _fields_ = [
+                #("lit_const", c_uint, 4),
+                ("pred", c_uint, 4),
+                ("src0", c_uint, 6),
                 ("ssrc0_", c_uint, 1),
                 ("op", c_uint, 8),
-                ("vdst", c_uint, 8),
-                ("enc", c_uint, 7),
-                ("lit_const", c_uint, 32)]
+                ("vdst", c_uint, 6),
+                ("enc", c_uint, 7)]
 
     def __init__(self, name=''):
         super().__init__(name)
@@ -770,14 +882,23 @@ class InstrVALU_VOP1(InstrValu):
         V_SEXT_I64_I32               = 0x1b
 
     def genGrammarInstrClass(self):
-        return self.getInstrDefName() + " vreg ',' generic_reg"
+        #return self.getInstrDefName() + " vreg ',' generic_reg"
+        return self.getInstrDefName() + " vreg ',' (register_ | builtin_operand)"
 
     def addOperand(self, operand):
         super().addOperand(operand)
-        if len(self.operands) == 1:
+        if isinstance(operand, str):
+            self.unresolved = True
+            return
+        self.updateOperand(len(self.operands))
+
+
+    def updateOperand(self, operand_num):
+        operand = self.operands[operand_num - 1]
+        if operand_num == 1:
             assert(isinstance(operand, Reg))
             self.vdst = operand.idx
-        elif len(self.operands) == 2:
+        elif operand_num == 2:
             assert(isinstance(operand, Reg))
             self.src0 = operand.idx
             if (operand.rtype == Reg.RegType.Scalar):
@@ -785,20 +906,25 @@ class InstrVALU_VOP1(InstrValu):
             else:
                 self.ssrc0_ = 1
 
+    def addBuiltinOperand(self, reg_str):
+        super().addSpecialOperand(UnresolvedReg.Kind.builtin, reg_str)
+        #reg = super().addSpecialOperand("builtin", reg_str)
+        #self.addOperand(reg)
+
     def getInstrSize(self):
         if self.src0 == 0xFF:
             return self.instr_size
         else:
             return 4
 
-
+#TODO add VOPCK
 class InstrVALU_VOPC(InstrValu):
-    _fields_ = [("src0", c_uint, 8),
+    _fields_ = [("src0", c_uint, 6),
                 ("ssrc0_", c_uint, 1),
-                ("vsrc1", c_uint, 8),
+                ("vsrc1", c_uint, 6),
+                ("tcc", c_uint, 4),
                 ("op", c_uint, 8),
-                ("enc", c_uint, 7),
-                ("lit_const", c_uint, 32)]
+                ("enc", c_uint, 7)]
 
     def __init__(self, name=''):
         super().__init__(name)
@@ -831,20 +957,37 @@ class InstrVALU_VOPC(InstrValu):
         V_CMP_GE_U32                = 0x1a
 
     def genGrammarInstrClass(self):
-        return self.getInstrDefName() + " vreg ',' generic_reg"
+        return self.getInstrDefName() + "special_cc_reg ',' vreg ',' generic_reg"
 
     def addOperand(self, operand):
         super().addOperand(operand)
-        if len(self.operands) == 1:
+        if isinstance(operand, str):
+            self.unresolved = True
+            return
+        self.updateOperand(len(self.operands))
+
+    def updateOperand(self, operand_num):
+        operand = self.operands[operand_num - 1]
+        if operand_num == 1:
             assert(isinstance(operand, Reg))
-            self.vdst = operand.idx
-        elif len(self.operands) == 2:
+            self.tcc = operand.idx
+        elif operand_num == 2:
+            assert(isinstance(operand, Reg))
+            self.vsrc1 = operand.idx
+        elif operand_num == 3:
             assert(isinstance(operand, Reg))
             self.src0 = operand.idx
             if (operand.rtype == Reg.RegType.Scalar):
                 self.ssrc0_ = 0
             else:
                 self.ssrc0_ = 1
+
+    def addSpecialCCReg(self, reg_str):
+        super().addSpecialOperand(UnresolvedReg.Kind.tcc, reg_str)
+        #reg = super().addSpecialOperand("tcc", reg_str)
+        #self.addOperand(reg)
+        #if (self.op == self.OpcodeEnum.V_ADD_U32.value):
+        #    self.op = self.OpcodeEnum.V_ADDCO_U32.value
 
     def getInstrSize(self):
         if self.src0 == 0xFF:
@@ -928,20 +1071,27 @@ class InstrVALU_VOP3A(InstrValu):
 
     def addOperand(self, operand):
         super().addOperand(operand)
-        if len(self.operands) == 1:
+        if isinstance(operand, str):
+            self.unresolved = True
+            return
+        self.updateOperand(len(self.operands))
+
+    def updateOperand(self, operand_num):
+        operand = self.operands[operand_num - 1]
+        if operand_num == 1:
             assert(isinstance(operand, Reg))
             self.sdst = operand.idx
-        elif len(self.operands) == 2:
+        elif operand_num == 2:
             assert(isinstance(operand, Reg))
             self.src0 = operand.idx
             if (operand.rtype == Reg.RegType.Vector):
                 self.src0 += 0x100
-        elif len(self.operands) == 3:
+        elif operand_num == 3:
             assert(isinstance(operand, Reg))
             self.src1 = operand.idx
             if (operand.rtype == Reg.RegType.Vector):
                 self.src1 += 0x100
-        elif len(self.operands) == 4:
+        elif operand_num == 4:
             assert(isinstance(operand, Reg))
             self.src1 = operand.idx
             if (operand.rtype == Reg.RegType.Vector):
@@ -974,10 +1124,17 @@ class InstrVALU_VOP3B(InstrValu):
 
     def addOperand(self, operand):
         super().addOperand(operand)
-        if len(self.operands) == 1:
+        if isinstance(operand, str):
+            self.unresolved = True
+            return
+        self.updateOperand(len(self.operands))
+
+    def updateOperand(self, operand_num):
+        operand = self.operands[operand_num - 1]
+        if operand_num == 1:
             assert(isinstance(operand, Reg))
             self.vdst = operand.idx
-        elif len(self.operands) == 2:
+        elif operand_num == 2:
             if isinstance(operand, int):
                 self.lit_const = operand
                 self.src0 = 0xFF
@@ -986,16 +1143,17 @@ class InstrVALU_VOP3B(InstrValu):
             self.src0 = operand.idx
             if (operand.rtype == Reg.RegType.Vector):
                 self.src0 += 0x100
-        elif len(self.operands) == 3:
+        elif operand_num == 3:
             assert(isinstance(operand, Reg))
             assert(operand.rtype == Reg.RegType.Vector)
             self.vsrc1 = operand.idx
 
     def addSpecialOperand(self, operand_type, reg_str):
-        reg = super().addSpecialOperand(operand_type, reg_str)
-        if (operand_type == "co"):
+        super().addSpecialOperand(operand_type, reg_str)
+        #reg = super().addSpecialOperand(operand_type, reg_str)
+        if (operand_type == UnresolvedReg.Kind.co):
             self.sdst = reg.idx
-        elif (operand_type == "ci"):
+        elif (operand_type == UnresolvedReg.Kind.ci):
             self.ssrc2 = reg.idx
 
 
@@ -1027,10 +1185,17 @@ class InstrSALU_SOP1(InstrSalu):
 
     def addOperand(self, operand):
         super().addOperand(operand)
-        if len(self.operands) == 1:
+        if isinstance(operand, str):
+            self.unresolved = True
+            return
+        self.updateOperand(len(self.operands))
+
+    def updateOperand(self, operand_num):
+        operand = self.operands[operand_num - 1]
+        if operand_num == 1:
             assert(isinstance(operand, Reg))
             self.sdst = operand.idx
-        elif len(self.operands) == 2:
+        elif operand_num == 2:
             assert(isinstance(operand, Reg))
             self.ssrc0 = operand.idx
 
@@ -1042,12 +1207,12 @@ class InstrSALU_SOP1(InstrSalu):
 
 
 class InstrSALU_SOP2(InstrSalu):
-    _fields_ = [("ssrc0", c_uint, 8),
-                ("ssrc1", c_uint, 8),
+    _fields_ = [
+                ("ssrc0", c_uint, 7),
+                ("ssrc1", c_uint, 7),
                 ("sdst", c_uint, 7),
                 ("op", c_uint, 7),
-                ("enc", c_uint, 2),
-                ("lit_const", c_uint, 32)]
+                ("enc", c_uint, 4)]
 
     def __init__(self, name=''):
         super().__init__(name)
@@ -1079,13 +1244,20 @@ class InstrSALU_SOP2(InstrSalu):
 
     def addOperand(self, operand):
         super().addOperand(operand)
-        if len(self.operands) == 1:
+        if isinstance(operand, str):
+            self.unresolved = True
+            return
+        self.updateOperand(len(self.operands))
+
+    def updateOperand(self, operand_num):
+        operand = self.operands[operand_num - 1]
+        if operand_num == 1:
             assert(isinstance(operand, Reg))
             self.sdst = operand.idx
-        elif len(self.operands) == 2:
+        elif operand_num == 2:
             assert(isinstance(operand, Reg))
             self.ssrc0 = operand.idx
-        elif len(self.operands) == 3:
+        elif operand_num == 3:
             assert(isinstance(operand, Reg))
             self.ssrc1 = operand.idx
 
@@ -1115,10 +1287,17 @@ class InstrSALU_SOPK(InstrSalu):
 
     def addOperand(self, operand):
         super().addOperand(operand)
-        if len(self.operands) == 1:
+        if isinstance(operand, str):
+            self.unresolved = True
+            return
+        self.updateOperand(len(self.operands))
+
+    def updateOperand(self, operand_num):
+        operand = self.operands[operand_num - 1]
+        if operand_num == 1:
             assert(isinstance(operand, Reg))
             self.sdst = operand.idx
-        elif len(self.operands) == 2:
+        elif operand_num == 2:
             assert(isinstance(operand, int))
             self.simm16 = operand
 
@@ -1149,10 +1328,17 @@ class InstrSALU_SOPC(InstrSalu):
 
     def addOperand(self, operand):
         super().addOperand(operand)
-        if len(self.operands) == 1:
+        if isinstance(operand, str):
+            self.unresolved = True
+            return
+        self.updateOperand(len(self.operands))
+
+    def updateOperand(self, operand_num):
+        operand = self.operands[operand_num - 1]
+        if operand_num == 1:
             assert(isinstance(operand, Reg))
             self.ssrc0 = operand.idx
-        elif len(self.operands) == 2:
+        elif operand_num == 2:
             assert(isinstance(operand, Reg))
             self.ssrc1 = operand.idx
 
@@ -1216,13 +1402,20 @@ class InstrSMEM_SLS(InstrSmem):
 
     def addOperand(self, operand):
         super().addOperand(operand)
-        if len(self.operands) == 1:
+        if isinstance(operand, str):
+            self.unresolved = True
+            return
+        self.updateOperand(len(self.operands))
+
+    def updateOperand(self, operand_num):
+        operand = self.operands[operand_num - 1]
+        if operand_num == 1:
             assert(isinstance(operand, Reg))
             self.sdst = operand.idx
-        elif len(self.operands) == 2:
+        elif operand_num == 2:
             assert(isinstance(operand, Reg))
             self.sbase = operand.idx
-        elif len(self.operands) == 3:
+        elif operand_num == 3:
             if (isinstance(operand, Reg)):
                 self.offset = operand.idx
                 self.imm = 0
@@ -1298,8 +1491,9 @@ class InstrVMEM_VMUBUF(InstrVmem):
 
 class InstrVMEM_VLS(InstrVmem):
     _fields_ = [("offset", c_uint, 6),
-                ("imm",   c_uint, 1),
+                #("imm",   c_uint, 1),
                 ("vaddr", c_uint, 6),
+                ("ssrc0_", c_uint, 1),
                 ("vdata", c_uint, 7),
                 ("slc",   c_uint, 1),
                 ("op",    c_uint, 5),
@@ -1320,32 +1514,45 @@ class InstrVMEM_VLS(InstrVmem):
 
 
     def genGrammarInstrClass(self):
-        return self.getInstrDefName() + " vreg ',' (vreg | dreg) ',' (vreg | dreg | number) ('%' mspace_all)?"
+        return self.getInstrDefName() + " vreg ',' (vreg | dreg | vmem_special_operand) ',' (vreg | dreg | number) ('%' mspace_all)?"
 
     def isStoreOp(self):
         return self.op >= self.OpcodeEnum.V_STORE_DWORD.value
 
+    def updateOperand(self, operand_num):
+        operand = self.operands[operand_num - 1]
+        if operand_num == 1:
+            assert(isinstance(operand, Reg))
+            if self.isStoreOp():
+                self.vaddr = operand.idx
+            else:
+                self.vdata = operand.idx
+        elif operand_num == 2:
+            assert(isinstance(operand, Reg))
+            if operand.rtype == Reg.RegType.Scalar:
+                self.ssrc0_ = 1
+            if self.isStoreOp():
+                self.vdata = operand.idx
+            else:
+                self.vaddr = operand.idx
+        elif operand_num == 3:
+            #if (isinstance(operand, Reg)):
+            #    self.offset = operand.idx
+            #    self.imm = 0
+            #else:
+            #    self.offset = operand
+            #    self.imm = 1
+            assert (isinstance(operand, int))
+            self.offset = operand
+
+
     def addOperand(self, operand):
         super().addOperand(operand)
+        if isinstance(operand, str):
+            self.unresolved = True
+            return
+        self.updateOperand(len(self.operands))
 
-        if len(self.operands) == 1:
-            assert(isinstance(operand, Reg))
-            if self.isStoreOp():
-                self.vaddr = operand.idx
-            else:
-                self.vdata = operand.idx
-        elif len(self.operands) == 2:
-            assert(isinstance(operand, Reg))
-            if self.isStoreOp():
-                self.vdata = operand.idx
-            else:
-                self.vaddr = operand.idx
-        elif len(self.operands) == 3:
-            if (isinstance(operand, Reg)):
-                self.offset = operand.idx
-                self.imm = 0
-            else:
-                self.offset = operand
-                self.imm = 1
-
-
+    def addSpecialOperand(self, reg_str):
+        #pdb.set_trace()
+        super().addSpecialOperand(UnresolvedReg.Kind.param, reg_str)

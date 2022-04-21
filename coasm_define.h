@@ -1,5 +1,7 @@
 #pragma once
 
+#define COASM_BUILTIN_USE 1
+// TODO below should be generate from coasm.py
 // special sregs
 #define SREG_M0 120  // default base register to share memory used by vop
 #define SREG_VCC 121
@@ -18,6 +20,7 @@
 // note is will decrease vreg since we reserve v63 down for const reg
 #define KERNEL_CONST_REG_BASE_KERNEL_VIEW 59
 // first 2 is reserve for kernel param and local mem ptr
+//FIXME is is same as MAX_RESERVED_REG_NUM
 #define KERNEL_CONST_REG_BASE 4
 
 // s[0:1] is reserved for local_stack_pointer
@@ -29,16 +32,17 @@
 // asm meta use kernel_ctrl to decode, the decode field is define
 // for coasm_sregs (ptx_ir.h)
 // the isasim will parse the ctrlbits and decide const buffer organize
-#define KERNEL_CTRL_BIT_GRID_DIM_X 0
-#define KERNEL_CTRL_BIT_GRID_DIM_Y 1
-#define KERNEL_CTRL_BIT_GRID_DIM_Z 2
-#define KERNEL_CTRL_BIT_BLOCK_DIM_X 3
-#define KERNEL_CTRL_BIT_BLOCK_DIM_Y 4
-#define KERNEL_CTRL_BIT_BLOCK_DIM_Z 5
+#define KERNEL_CTRL_BIT_PARAM_BASE 0
+#define KERNEL_CTRL_BIT_GRID_DIM_X 4
+#define KERNEL_CTRL_BIT_GRID_DIM_Y 5
+#define KERNEL_CTRL_BIT_GRID_DIM_Z 6
+#define KERNEL_CTRL_BIT_BLOCK_DIM_X 7
+#define KERNEL_CTRL_BIT_BLOCK_DIM_Y 8
+#define KERNEL_CTRL_BIT_BLOCK_DIM_Z 9
 
-#define KERNEL_CTRL_BIT_BLOCK_IDX_X 6
-#define KERNEL_CTRL_BIT_BLOCK_IDX_Y 7
-#define KERNEL_CTRL_BIT_BLOCK_IDX_Z 8
+#define KERNEL_CTRL_BIT_BLOCK_IDX_X 12
+#define KERNEL_CTRL_BIT_BLOCK_IDX_Y 13
+#define KERNEL_CTRL_BIT_BLOCK_IDX_Z 14
 
 #define KERNEL_CTRL_BIT_THREAD_IDX_X 16
 #define KERNEL_CTRL_BIT_THREAD_IDX_Y 17

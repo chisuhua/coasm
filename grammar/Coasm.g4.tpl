@@ -91,9 +91,16 @@ global_: GLOBAL_;
 shared_: SHARED_;
 
 special_operand : ident ':' special_reg;
-special_reg: sreg | vcc;
+special_reg: sreg | tcc;
 
-vcc:  VCC;
+// use in VOPC
+special_cc_reg: sreg | tcc;
+
+vmem_special_operand : ident;
+
+builtin_operand : ident;
+
+tcc:  TCC;
 
 section_directive: section_name (',' section_modifier)*;
 
@@ -191,7 +198,7 @@ SREG: S (R E G)? DIGIT;
 
 SREG_INDEX: S (R E G)? '[' DIGIT ':' DIGIT ']';
 
-VCC: V C C;
+TCC: T (C C)? DIGIT;
 
 FLAT: F L A T;
 

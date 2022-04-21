@@ -91,9 +91,16 @@ global_: GLOBAL_;
 shared_: SHARED_;
 
 special_operand : ident ':' special_reg;
-special_reg: sreg | vcc;
+special_reg: sreg | tcc;
 
-vcc:  VCC;
+// use in VOPC
+special_cc_reg: sreg | tcc;
+
+vmem_special_operand : ident;
+
+builtin_operand : ident;
+
+tcc:  TCC;
 
 section_directive: section_name (',' section_modifier)*;
 
@@ -132,8 +139,8 @@ lop_imm
 
 instrvalu:
 		VALU_VOP2 vreg ',' generic_reg_or_number ',' vreg (',' special_operand)* 
-         | VALU_VOP1 vreg ',' generic_reg
-         | VALU_VOPC vreg ',' generic_reg
+         | VALU_VOP1 vreg ',' (register_ | builtin_operand)
+         | VALU_VOPCspecial_cc_reg ',' vreg ',' generic_reg
          | VALU_VOP3A vreg ',' generic_reg ',' generic_reg ',' generic_reg
          | VALU_VOP3B vreg ',' generic_reg_or_number ',' vreg (',' special_operand)* ;
 
@@ -149,7 +156,7 @@ instrsmem:
 
 instrvmem:
 		VMEM_VMUBUF vreg ',' vreg ',' sreg ',' sreg
-         | VMEM_VLS vreg ',' (vreg | dreg) ',' (vreg | dreg | number) ('%' mspace_all)?;
+         | VMEM_VLS vreg ',' (vreg | dreg | vmem_special_operand) ',' (vreg | dreg | number) ('%' mspace_all)?;
 
 instrdmem:
 		DMEM_DLS (vreg | ident | mem_expr_list) ',' mem_expr_list;
@@ -212,7 +219,7 @@ SREG: S (R E G)? DIGIT;
 
 SREG_INDEX: S (R E G)? '[' DIGIT ':' DIGIT ']';
 
-VCC: V C C;
+TCC: T (C C)? DIGIT;
 
 FLAT: F L A T;
 
@@ -239,6 +246,7 @@ VALU_VOP2:
          | V '_' S U B R E V '_' F '3' '2'
          | V '_' M U L '_' F '3' '2'
          | V '_' M U L '_' I '3' '2' '_' I '2' '4'
+         | V '_' M U L L O '_' I '3' '2' '_' I '3' '2'
          | V '_' M I N '_' F '3' '2'
          | V '_' M A X '_' F '3' '2'
          | V '_' M I N '_' I '3' '2'
@@ -255,7 +263,7 @@ VALU_VOP2:
          | V '_' B F M '_' B '3' '2'
          | V '_' M A C '_' F '3' '2'
          | V '_' M A D M K '_' F '3' '2'
-         | V '_' A D D '_' I '3' '2'
+         | V '_' A D D '_' I '3' '2' '_' I '3' '2'
          | V '_' S U B '_' I '3' '2'
          | V '_' S U B R E V '_' I '3' '2'
          | V '_' A D D '_' U '3' '2'

@@ -359,12 +359,39 @@ class CoasmListener(ParseTreeListener):
         pass
 
 
-    # Enter a parse tree produced by CoasmParser#vcc.
-    def enterVcc(self, ctx:CoasmParser.VccContext):
+    # Enter a parse tree produced by CoasmParser#special_cc_reg.
+    def enterSpecial_cc_reg(self, ctx:CoasmParser.Special_cc_regContext):
         pass
 
-    # Exit a parse tree produced by CoasmParser#vcc.
-    def exitVcc(self, ctx:CoasmParser.VccContext):
+    # Exit a parse tree produced by CoasmParser#special_cc_reg.
+    def exitSpecial_cc_reg(self, ctx:CoasmParser.Special_cc_regContext):
+        pass
+
+
+    # Enter a parse tree produced by CoasmParser#vmem_special_operand.
+    def enterVmem_special_operand(self, ctx:CoasmParser.Vmem_special_operandContext):
+        pass
+
+    # Exit a parse tree produced by CoasmParser#vmem_special_operand.
+    def exitVmem_special_operand(self, ctx:CoasmParser.Vmem_special_operandContext):
+        pass
+
+
+    # Enter a parse tree produced by CoasmParser#builtin_operand.
+    def enterBuiltin_operand(self, ctx:CoasmParser.Builtin_operandContext):
+        pass
+
+    # Exit a parse tree produced by CoasmParser#builtin_operand.
+    def exitBuiltin_operand(self, ctx:CoasmParser.Builtin_operandContext):
+        pass
+
+
+    # Enter a parse tree produced by CoasmParser#tcc.
+    def enterTcc(self, ctx:CoasmParser.TccContext):
+        pass
+
+    # Exit a parse tree produced by CoasmParser#tcc.
+    def exitTcc(self, ctx:CoasmParser.TccContext):
         pass
 
 
