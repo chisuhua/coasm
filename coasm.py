@@ -282,6 +282,7 @@ class Reg(VariableSymbol):
         self.reg_name = None
         self.idx = None
         self.end_idx = None
+        self.lie = None     # for Data register and lane id to reg_idx
         start_pos = 0
         print("INFO: reg str:" + reg_str)
         if len(reg_str) == 0:
@@ -306,7 +307,10 @@ class Reg(VariableSymbol):
             self.rtype = Reg.RegType.Vector
         elif reg_str[0] == "d":
             self.rtype = Reg.RegType.Data
-        elif reg_str[0] == "t":
+        elif reg_str[0] == "l":
+            self.rtype = Reg.RegType.Data
+            self.lie = True
+        elif reg_str[0:3] == "tcc":
             self.rtype = Reg.RegType.TCC
         else:
             assert("invalid reg name")
@@ -341,10 +345,18 @@ class Reg(VariableSymbol):
 
     def __str__(self):
         if self.end_idx is not None and self.end_idx != self.idx:
-            return "{}[{}:{}]".format( "s" if self.rtype is Reg.RegType.Scalar else "v" if self.rtype is Reg.RegType.Vector else "d",
+            return "{}[{}:{}]".format( "s" if self.rtype is Reg.RegType.Scalar \
+                                  else "v" if self.rtype is Reg.RegType.Vector \
+                                  else "l" if self.rtype is Reg.RegType.Data and self.lie \
+                                  else "tcc" if self.rtype is Reg.RegType.TCC \
+                                  else "d",
                     self.idx, self.end_idx)
         else:
-            return "{}{}".format( "s" if self.rtype is Reg.RegType.Scalar else "v" if self.rtype is Reg.RegType.Vector else "d",
+            return "{}{}".format( "s" if self.rtype is Reg.RegType.Scalar \
+                             else "v" if self.rtype is Reg.RegType.Vector \
+                             else "l" if self.rtype is Reg.RegType.Data and self.lie \
+                             else "tcc" if self.rtype is Reg.RegType.TCC \
+                             else "d",
                     self.idx)
 
 class SpecialREG:
@@ -454,19 +466,19 @@ class ArgSymbol(Symbol):
         self.size = 0
         self.kind = ArgSymbol.Kind.SREG_VALUE
 
-class InstrField:
-    class TypeEnum(Enum):
-        UINT = 0
-        INT = 1
-        STRUCT = 2
-        UNION = 3
-
-    def __init__(self, name="", type=TypeEnum.UINT):
-        self.name = name
-        self.msb = 0
-        self.lsb = 0
-        self.type =  TypeEnum.UINT
-        self.child = []
+#class InstrField:
+#    class TypeEnum(Enum):
+#        UINT = 0
+#        INT = 1
+#        STRUCT = 2
+#        UNION = 3
+#
+#    def __init__(self, name="", type=TypeEnum.UINT):
+#        self.name = name
+#        self.msb = 0
+#        self.lsb = 0
+#        self.type =  TypeEnum.UINT
+#        self.child = []
 
 class VisitType(Enum):
     GRAMMAR_INSTR_FMT = 1
@@ -477,6 +489,19 @@ class VisitType(Enum):
     GEN_INSTR_OP_ENUM_DEF = 6
     GEN_INSTR_DEF = 7
 
+CommonEnc = namedtuple('CommonEnc', ['width', 'value'])
+common_enc = {}
+common_enc["ext_enc"] = CommonEnc(4, 0x7)
+common_enc["dsrc0_l"] = CommonEnc(2, 0x3)
+common_enc["dsrc0_d"] = CommonEnc(2, 0x2)
+common_enc["dsrc0_s"] = CommonEnc(2, 0x1)
+common_enc["dsrc0_v"] = CommonEnc(2, 0x0)
+common_enc["max_src0_32e"] = CommonEnc(6, 127)
+common_enc["max_vsrc1_32e"] = CommonEnc(6, 127)
+common_enc["max_vdst_32e"] = CommonEnc(6, 127)
+common_enc["max_tcc_32e"] = CommonEnc(2, 3)
+
+
 # to compatiable RISCV isa encoding, we avoid using RISCV enc field:
 #   32bit 11
 #   48bit 111110
@@ -486,14 +511,15 @@ class VisitType(Enum):
 
 # EXT enc is a way to add more 32bit to next instruction.
 #    the EXT 32bit 's decoding is depend on next instruction enc
+# the Instr is created with enterInstruction in assembler.py , which pas op name as arg
+OpType = namedtuple('OpType', ['name', 'value'])
 class Instr(LittleEndianStructure):
     _pack_ = 1
     FmtEnc = namedtuple('FmtEnc', ['bit_start', 'width', 'value'])
     fmt_enc = {}
     fmt_enc["VOP2"] = FmtEnc(31, 2, 0b00)
-    fmt_enc["EXT1"] = FmtEnc(31, 4, 0b0100)
-    fmt_enc["EXT2"] = FmtEnc(31, 4, 0b0101)
-    fmt_enc["EXT3"] = FmtEnc(31, 4, 0b0111)
+    fmt_enc["EXT1"] = FmtEnc(31,  3, 0b010)
+    fmt_enc["EXT"] =  FmtEnc(31, 4, 0b0111)
     fmt_enc["SOP2"] = FmtEnc(31, 4, 0b0110)
     fmt_enc["SOPK"] = FmtEnc(31, 4, 0b1001)
     fmt_enc["SLS"] =  FmtEnc(31, 4, 0b1011)
@@ -517,7 +543,7 @@ class Instr(LittleEndianStructure):
         self.lop_imm = None
         self.stride_imm = 0
         self.branch_cond = 0
-        self.pos = 0
+        self.code_pos = 0
         self.flags = {}
         self.encoded_inst = 0
         self.is_encoded = False
@@ -541,15 +567,23 @@ class Instr(LittleEndianStructure):
         if name == "":
             assert("Warn:create instr without correct op enum")
         else:
+            self.setupOpTable()
             self.enc = Instr.fmt_enc[self.getFmtName()].value
-            self.op = self.OpcodeEnum[name.upper()].value
+            self.op = self.optable[name.upper()].value
             assert(self.enc == Instr.fmt_enc[self.getFmtName()].value)
-            assert(self.op == self.OpcodeEnum[name.upper()].value)
+            assert(self.op == self.optable[name.upper()].value)
+
+    def setupOpTable(self):
+        self.optable = {}
+        for op in self._optable_:
+            self.optable[op[0]] = OpType(*op)
 
 
     def addOperand(self, operand):
         if (isinstance(operand, int)):
             self.setImm(operand)
+        elif (isinstance(operand, str)):
+            self.unresolved = True
         self.operands.append(operand)
 
     def addUnresolvedOperand(self, operand_type, reg_str):
@@ -606,11 +640,25 @@ class Instr(LittleEndianStructure):
         return instr, fmt
 
     def getCppFieldEncode(self):
-        instr_encode = "\nstruct Bytes" + self.getFmtName() +  " {\n" + \
-        "\n".join(["    uint32_t {} : {};".format(n[0], n[-1]) for n in self._fields_]) + "\n};"
+        instr_encode = "\nstruct Bytes" + self.getFmtName() +  " {\n"
+        instr_encode += "\n".join(["    uint32_t {} : {};".format(n[0], n[-1]) for n in self._fields_ if n[0][0:3] != 'ext'])
+        ext_  = [n for n in self._fields_ if n[0][0:3] == 'ext']
+        if len(ext_) > 0:
+            instr_encode += "\n\tunion {\n"
+            instr_encode += "\tstruct Ext {\n"
+            instr_encode += "\n".join(["\t    uint32_t {} : {};".format(n[0], n[-1]) for n in ext_])
+            instr_encode += "\n\t} e0_;\n"
+            for ext_fields in dir(self):
+                if ext_fields.find('_fields_e') >= 0:
+                    #pdb.set_trace()
+                    instr_encode += "\n\tstruct Bytes" + self.getFmtName() +  "_{}".format(ext_fields[8:]) + " {\n"
+                    exec("self.tmp_ext_field = self.{}._fields_".format(ext_fields))
+                    instr_encode += "\n".join(["\t    uint32_t {} : {};".format(n[0], n[-1]) for n in self.tmp_ext_field]) + "\n\t}" + " {};".format(ext_fields[8:])
+            instr_encode += "\n\t} ext;\n"
+        instr_encode += "\n};"
         instr_encode += "\nvoid print" + self.getFmtName() + "(Bytes" + self.getFmtName() + " bytes) {\n" + \
-        "printf(\"" + ",".join(["{} %x ".format(n[0], n[-1]) for n in self._fields_]) + "\\n\", " + \
-        ",".join(["bytes.{}".format(n[0], n[-1]) for n in self._fields_]) + ");\n};\n"
+                "printf(\"" + ",".join(["{} %x ".format(n[0], n[-1]) for n in self._fields_ if n[0][0:3] != 'ext']) + "\\n\", " + \
+                ",".join(["bytes.{}".format(n[0], n[-1]) for n in self._fields_ if n[0][0:3] != 'ext']) + ");\n};\n"
         return instr_encode
 
     def getFlag(self, name):
@@ -630,8 +678,10 @@ class Instr(LittleEndianStructure):
 
     def getOpcodeEnumList(self):
         opcode_list = OrderedDict()
-        for op in self.OpcodeEnum:
-            opcode_list[op.name] = hex(op.value)
+        for op in self._optable_:
+            name = op[0]
+            value = op[1]
+            opcode_list[name] = hex(value)
         return opcode_list
 
     def genInstrOpcodeDef(self, f, fmt):
@@ -714,7 +764,7 @@ class Instr(LittleEndianStructure):
 
 
     def genGrammarInstrDef(self, f):
-        tmp = [utilReplace(" ".join(list(op.name))) for op in self.OpcodeEnum]
+        tmp = [utilReplace(" ".join(op[0])) for op in self._optable_]
         op_list = "(" + "\n         | ".join(tmp) + ") E32?"
         f.append({"name": self.getInstrDefName(), "value": op_list})
         return
@@ -725,6 +775,47 @@ class Instr(LittleEndianStructure):
 class InstrValu(Instr):
     def __init__(self, name=''):
         super().__init__(name)
+
+    def encode_vdst(self, operand):
+        assert(isinstance(operand, Reg))
+        if operand.idx <= common_enc["max_vdst_32e"].value:
+            self.vdst = operand.idx
+        else:
+            pdb.set_trace()
+
+
+    def encode_src0(self, operand):
+        if (isinstance(operand, int)):
+            self.imm_ = 1
+            self.src0 = operand & 0x3f
+            self.dsrc0_ = (operand >> 6) & 0x3
+            if operand >= 0x40:
+                self.ext_enc = common_enc["ext_enc"].value
+                self.ext = operand >> 6
+            return
+        assert(isinstance(operand, Reg))
+        if (operand.rtype == Reg.RegType.Data):
+            if operand.lie is True:
+                self.dsrc0_ = common_enc["dsrc0_l"].value
+            else:
+                self.dsrc0_ = common_enc["dsrc0_d"].value
+        elif (operand.rtype == Reg.RegType.Scalar):
+            self.dsrc0_ = common_enc["dsrc0_s"].value
+        else:
+            self.dsrc0_ = common_enc["dsrc0_v"].value
+        if operand.idx <= common_enc["max_src0_32e"].value:
+            self.src0 = operand.idx
+        else:
+            pdb.set_trace()
+
+    def encode_vsrc1(self, operand):
+        assert(isinstance(operand, Reg))
+        if operand.idx <= common_enc["max_vsrc1_32e"].value:
+            self.vsrc1 = operand.idx
+        else:
+            pdb.set_trace()
+
+
 
 class InstrSalu(Instr):
     def __init__(self, name=''):
@@ -745,52 +836,60 @@ class InstrDmem(Instr):
 #------------------------------
 class InstrVALU_VOP2(InstrValu):
     _fields_ = [
-                ("lit_const", c_uint, 4),
+                ("pred", c_uint, 2),
+                ("imm_", c_uint, 1),  # imm_ indicate dsrc0_src0 is imm
                 ("src0", c_uint, 6),
-                ("ssrc0_", c_uint, 1),
+                ("dsrc0_", c_uint, 2),  # '10, dreg '11 it is lreg,  '00 is vector, '01 is Scalar
                 ("vsrc1", c_uint, 6),
                 ("vdst", c_uint, 6),
                 ("op", c_uint, 7),
-                ("enc", c_uint, 2)]
+                ("enc", c_uint, 2),
+                ('ext',     c_uint, 28),
+                ('ext_enc', c_uint, 4)]
+
+    _optable_ = [
+                ('V_CNDMASK_B32',  0x0),
+                ('V_ADD_F32',  0x1),
+                ('V_SUB_F32',  0x3),
+                ('V_SUBREV_F32', 0x4),
+                ('V_MUL_F32',   0x5),
+                ('V_MUL_I32_I24', 0x6),
+                ('V_MULLO_I32_I32', 0x7),
+                ('V_MIN_F32', 0xa),
+                ('V_MAX_F32', 0xb),
+                ('V_MIN_I32', 0xc),
+                ('V_MAX_I32', 0xd),
+                ('V_MIN_U32', 0x11),
+                ('V_MAX_U32', 0x12),
+                ('V_LSHRREV_B32', 0x13),
+                ('V_ASHRREV_I32', 0x14),
+                ('V_LSHL_B32', 0x15),
+                ('V_LSHLREV_B32', 0x16),
+                ('V_AND_B32', 0x17),
+                ('V_OR_B32', 0x18),
+                ('V_XOR_B32', 0x19),
+                ('V_BFM_B32', 0x20),
+                ('V_MAC_F32', 0x21),
+                #('V_MADMK_F32', 0x22),  move to 3 op
+                ('V_ADD_I32_I32', 0x22),
+                ('V_ADD_I64_I64', 0x23),
+                ('V_SUB_I32', 0x24),
+                ('V_SUBREV_I32', 0x25),
+                ('V_ADD_U32', 0x26),
+                ('V_ADDCO_U32', 0x27),
+                ('V_SUB_U32', 0x28),
+                ('V_SUBREV_U32', 0x29),
+                ('V_LSHL_B64', 0x2a),
+                ('V_ASHR_I64', 0x2b),
+                ('V_ADD_F64', 0x2c)
+            ]
 
     def __init__(self, name=''):
         super().__init__(name)
 
-    class OpcodeEnum(Enum):
-        V_CNDMASK_B32              = 0x0
-        V_ADD_F32                  = 0x1
-        V_SUB_F32                  = 0x3
-        V_SUBREV_F32               = 0x4
-        V_MUL_F32                  = 0x5
-        V_MUL_I32_I24              = 0x6
-        V_MULLO_I32_I32            = 0x7
-        V_MIN_F32                  = 0xa
-        V_MAX_F32                  = 0xb
-        V_MIN_I32                  = 0xc
-        V_MAX_I32                  = 0xd
-        V_MIN_U32                  = 0x11
-        V_MAX_U32                  = 0x12
-        V_LSHRREV_B32              = 0x13
-        V_ASHRREV_I32              = 0x14
-        V_LSHL_B32                 = 0x15
-        V_LSHLREV_B32              = 0x16
-        V_AND_B32                  = 0x17
-        V_OR_B32                   = 0x18
-        V_XOR_B32                  = 0x19
-        V_BFM_B32                  = 0x20
-        V_MAC_F32                  = 0x21
-        V_MADMK_F32                = 0x22
-        V_ADD_I32_I32              = 0x23
-        V_SUB_I32                  = 0x24
-        V_SUBREV_I32               = 0x25
-        V_ADD_U32                  = 0x26
-        V_ADDCO_U32                = 0x27
-        V_SUB_U32                  = 0x28
-        V_SUBREV_U32               = 0x29
-        #V_CVT_PKRZ_F16_F32         = 0x26
-
     def genGrammarInstrClass(self):
-        return self.getInstrDefName() + " vreg ',' generic_reg_or_number ',' vreg (',' special_operand)* "
+        #return self.getInstrDefName() + " vreg ',' generic_reg_or_number ',' vreg (',' special_operand)*"
+        return self.getInstrDefName() + " vreg ',' vreg ',' generic_reg_or_number (',' special_operand)*"
 
     def addOperand(self, operand):
         super().addOperand(operand)
@@ -802,25 +901,13 @@ class InstrVALU_VOP2(InstrValu):
     def updateOperand(self, operand_num):
         operand = self.operands[operand_num-1]
         if operand_num == 1:
-            assert(isinstance(operand, Reg))
-            self.vdst = operand.idx
+            self.encode_vdst(operand)
         elif operand_num == 2:
-            if isinstance(operand, int):
-                self.lit_const = operand
-                self.src0 = 0xFF
-                return
-            self.src0 = operand.idx
-            if (operand.rtype == Reg.RegType.Scalar):
-                self.ssrc0_ = 1
-            else:
-                self.ssrc0_ = 0
+            self.encode_vsrc1(operand)
         elif operand_num == 3:
-            assert(isinstance(operand, Reg))
-            #if isinstance(operand, int):
-            #    self.lit_const = operand
-            #    self.vsrc1 = 0xFF
-            #elif isinstance(operand, Reg):
-            self.vsrc1 = operand.idx
+            self.encode_src0(operand)
+
+
 
     def addSpecialOperand(self, operand_type, reg_str):
         assert(operand_type == UnresolvedReg.Kind.ci and reg_str[0:3] == "tcc")
@@ -830,56 +917,59 @@ class InstrVALU_VOP2(InstrValu):
         if (self.op == self.OpcodeEnum.V_ADD_U32.value):
             self.op = self.OpcodeEnum.V_ADDCO_U32.value
 
-
     def getInstrSize(self):
-        if self.src0 == 0xFF:
-            return self.instr_size
+        if self.ext_enc != 0x0:
+            return 8
         else:
             return 4
 
-
+# dreg use implicit M0 to knoe stride addr between lane
 class InstrVALU_VOP1(InstrValu):
     _fields_ = [
-                #("lit_const", c_uint, 4),
-                ("pred", c_uint, 4),
+                ("pred", c_uint, 2),
+                ("imm_", c_uint, 1),  # imm_ indicate dsrc0_src0 is imm
                 ("src0", c_uint, 6),
-                ("ssrc0_", c_uint, 1),
+                ("dsrc0_", c_uint, 2),  # '10, dreg '11 it is lreg,  '00 is vector, '01 is Scalar
                 ("op", c_uint, 8),
                 ("vdst", c_uint, 6),
-                ("enc", c_uint, 7)]
+                ("enc", c_uint, 7),
+                ('ext',     c_uint, 28),
+                ('ext_enc', c_uint, 4)]
+
+    _optable_ = [
+                ('V_NOP', 0x0),
+                ('V_MOV_B32', 0x1),
+                ('V_READFIRSTLANE_B32', 0x2),
+                ('V_CVT_I32_F64', 0x3),
+                ('V_CVT_F64_I32', 0x4),
+                ('V_CVT_F32_I32', 0x5),
+                ('V_CVT_F32_U32', 0x6),
+                ('V_CVT_U32_F32', 0x7),
+                ('V_CVT_I32_F32', 0x8),
+                ('V_CVT_F32_F64', 0x9),
+                ('V_CVT_F64_F32', 0xa),
+                ('V_CVT_F64_U32', 0xb),
+                ('V_TRUNC_F32', 0xc),
+                ('V_FLOOR_F32', 0xd),
+                ('V_LOG_F32', 0xe),
+                ('V_RCP_F32', 0xf),
+                ('V_RSQ_F32', 0x10),
+                ('V_RCP_F64', 0x11),
+                ('V_RSQ_F64', 0x12),
+                ('V_SQRT_F32', 0x13),
+                ('V_SIN_F32', 0x14),
+                ('V_COS_F32', 0x15),
+                ('V_NOT_B32', 0x16),
+                ('V_FFBH_U32', 0x17),
+                ('V_FRACT_F64', 0x18),
+                ('V_MOVRELD_B32', 0x19),
+                ('V_MOVRELS_B32', 0x1a),
+                ('V_SEXT_I64_I32', 0x1b)
+                ]
 
     def __init__(self, name=''):
         super().__init__(name)
 
-    class OpcodeEnum(Enum):
-        V_NOP                         = 0x0
-        V_MOV_B32                     = 0x1
-        V_READFIRSTLANE_B32           = 0x2
-        V_CVT_I32_F64                 = 0x3
-        V_CVT_F64_I32                 = 0x4
-        V_CVT_F32_I32                 = 0x5
-        V_CVT_F32_U32                 = 0x6
-        V_CVT_U32_F32                 = 0x7
-        V_CVT_I32_F32                 = 0x8
-        V_CVT_F32_F64                 = 0x9
-        V_CVT_F64_F32                 = 0xa
-        V_CVT_F64_U32                 = 0xb
-        V_TRUNC_F32                   = 0xc
-        V_FLOOR_F32                   = 0xd
-        V_LOG_F32                     = 0xe
-        V_RCP_F32                     = 0xf
-        V_RSQ_F32                     = 0x10
-        V_RCP_F64                   = 0x11
-        V_RSQ_F64                   = 0x12
-        V_SQRT_F32                  = 0x13
-        V_SIN_F32                   = 0x14
-        V_COS_F32                   = 0x15
-        V_NOT_B32                   = 0x16
-        V_FFBH_U32                  = 0x17
-        V_FRACT_F64                 = 0x18
-        V_MOVRELD_B32                 = 0x19
-        V_MOVRELS_B32                 = 0x1a
-        V_SEXT_I64_I32               = 0x1b
 
     def genGrammarInstrClass(self):
         #return self.getInstrDefName() + " vreg ',' generic_reg"
@@ -896,15 +986,9 @@ class InstrVALU_VOP1(InstrValu):
     def updateOperand(self, operand_num):
         operand = self.operands[operand_num - 1]
         if operand_num == 1:
-            assert(isinstance(operand, Reg))
-            self.vdst = operand.idx
+            self.encode_vdst(operand)
         elif operand_num == 2:
-            assert(isinstance(operand, Reg))
-            self.src0 = operand.idx
-            if (operand.rtype == Reg.RegType.Scalar):
-                self.ssrc0_ = 0
-            else:
-                self.ssrc0_ = 1
+            self.encode_src0(operand)
 
     def addBuiltinOperand(self, reg_str):
         super().addSpecialOperand(UnresolvedReg.Kind.builtin, reg_str)
@@ -912,82 +996,93 @@ class InstrVALU_VOP1(InstrValu):
         #self.addOperand(reg)
 
     def getInstrSize(self):
-        if self.src0 == 0xFF:
-            return self.instr_size
+        if self.ext_enc != 0x0:
+            return 8
         else:
             return 4
 
 #TODO add VOPCK
 class InstrVALU_VOPC(InstrValu):
-    _fields_ = [("src0", c_uint, 6),
-                ("ssrc0_", c_uint, 1),
+    _fields_ = [
+                ("pred", c_uint, 2),
+                ("imm_", c_uint, 1),
+                ("src0", c_uint, 6),
+                ("dsrc0_", c_uint, 2),
                 ("vsrc1", c_uint, 6),
-                ("tcc", c_uint, 4),
-                ("op", c_uint, 8),
-                ("enc", c_uint, 7)]
+                ("tcc", c_uint, 2),
+                ("op", c_uint, 6),
+                ("enc", c_uint, 7),
+                ('ext',     c_uint, 28),
+                ('ext_enc', c_uint, 4)]
 
     def __init__(self, name=''):
         super().__init__(name)
 
-    class OpcodeEnum(Enum):
-        V_CMP_LT_F32                = 0x1
-        V_CMP_GT_F32                = 0x2
-        V_CMP_GE_F32                = 0x3
-        V_CMP_NGT_F32               = 0x4
-        V_CMP_NEQ_F32               = 0x5
-        #V_CMP_LT_F64                = 0x6
-        #V_CMP_EQ_F64                = 0x7
-        #V_CMP_LE_F64                = 0x8
-        #V_CMP_GT_F64                = 0xa
-        #V_CMP_NGE_F64               = 0xb
-        #V_CMP_NEQ_F64              = 0xc
-        #V_CMP_NLT_F64               = 0xd
-        V_CMP_LT_I32                = 0xe
-        V_CMP_EQ_I32                = 0xf
-        V_CMP_LE_I32                = 0x10
-        V_CMP_GT_I32                = 0x11
-        V_CMP_NE_I32                = 0x12
-        V_CMP_GE_I32                = 0x13
-        #V_CMP_CLASS_F64             = 0x14
-        V_CMP_LT_U32                = 0x15
-        V_CMP_EQ_U32                = 0x16
-        V_CMP_LE_U32                = 0x17
-        V_CMP_GT_U32                = 0x18
-        V_CMP_NE_U32                = 0x19
-        V_CMP_GE_U32                = 0x1a
+    _optable_ = [
+                ('V_CMP_LT_F32', 0x1),
+                ('V_CMP_GT_F32', 0x2),
+                ('V_CMP_GE_F32', 0x3),
+                ('V_CMP_NGT_F32', 0x4),
+                ('V_CMP_NEQ_F32', 0x5),
+                #('#V_CMP_LT_F64', 0x6),
+                #('#V_CMP_EQ_F64', 0x7),
+                #('#V_CMP_LE_F64', 0x8),
+                #('#V_CMP_GT_F64', 0xa),
+                #('#V_CMP_NGE_F64', 0xb),
+                #('#V_CMP_NEQ_F64', 0xc),
+                #('#V_CMP_NLT_F64', 0xd),
+                ('V_CMP_LT_I32', 0xe),
+                ('V_CMP_EQ_I32', 0xf),
+                ('V_CMP_LE_I32', 0x10),
+                ('V_CMP_GT_I32', 0x11),
+                ('V_CMP_NE_I32', 0x12),
+                ('V_CMP_GE_I32', 0x13),
+                #('#V_CMP_CLASS_F64', 0x14),
+                ('V_CMP_LT_U32', 0x15),
+                ('V_CMP_EQ_U32', 0x16),
+                ('V_CMP_LE_U32', 0x17),
+                ('V_CMP_GT_U32', 0x18),
+                ('V_CMP_NE_U32', 0x19),
+                ('V_CMP_GE_U32', 0x1a)
+                ]
 
     def genGrammarInstrClass(self):
-        return self.getInstrDefName() + "special_cc_reg ',' vreg ',' generic_reg"
+        return self.getInstrDefName() + " sreg_or_tcc ',' vreg ',' generic_reg"
 
     def addOperand(self, operand):
         super().addOperand(operand)
-        if isinstance(operand, str):
-            self.unresolved = True
-            return
-        self.updateOperand(len(self.operands))
+        #if isinstance(operand, str):
+        #    self.unresolved = True
+        #    return
+        #self.updateOperand(len(self.operands))
 
     def updateOperand(self, operand_num):
         operand = self.operands[operand_num - 1]
         if operand_num == 1:
+            #pdb.set_trace()
             assert(isinstance(operand, Reg))
-            self.tcc = operand.idx
-        elif operand_num == 2:
-            assert(isinstance(operand, Reg))
-            self.vsrc1 = operand.idx
-        elif operand_num == 3:
-            assert(isinstance(operand, Reg))
-            self.src0 = operand.idx
-            if (operand.rtype == Reg.RegType.Scalar):
-                self.ssrc0_ = 0
+            if operand.idx <= common_enc["max_tcc_32e"].value:
+                self.tcc = operand.idx
             else:
-                self.ssrc0_ = 1
+                self.ext_enc = common_enc["ext_enc"].value
+                self.ext = operand >> 6
+                pdb.set_trace()
+        elif operand_num == 2:
+            self.encode_src0(operand)
+        elif operand_num == 3:
+            self.encode_vsrc1(operand)
 
-    def addSpecialCCReg(self, reg_str):
-        super().addSpecialOperand(UnresolvedReg.Kind.tcc, reg_str)
-        #reg = super().addSpecialOperand("tcc", reg_str)
-        #self.addOperand(reg)
-        #if (self.op == self.OpcodeEnum.V_ADD_U32.value):
-        #    self.op = self.OpcodeEnum.V_ADDCO_U32.value
+
+    #def addSpecialCCReg(self, reg_str):
+    #    #pdb.set_trace()
+    #    reg = Reg(reg_str)
+    #    self.addReg(reg)
+    #    #self.updateOperand(len(self.operands))
+    #    #super().addSpecialOperand(UnresolvedReg.Kind.tcc, reg_str)
+    #    #reg = super().addSpecialOperand("tcc", reg_str)
+    #    #self.addOperand(reg)
+    #    #if (self.op == self.OpcodeEnum.V_ADD_U32.value):
+    #    #    self.op = self.OpcodeEnum.V_ADDCO_U32.value
 
     def getInstrSize(self):
         if self.src0 == 0xFF:
@@ -1008,63 +1103,60 @@ class InstrVALU_VOP3A(InstrValu):
                 ("omod", c_uint, 2),
                 ("neg", c_uint, 3)]
 
+    _optable_ = [
+                ('V_CNDMASK_B32_VOP3A', 0x1),
+                ('V_ADD_F32_VOP3A', 0x2),
+                ('V_SUBREV_F32_VOP3A', 0x3),
+                ('V_MUL_F32_VOP3A', 0x4),
+                ('V_MUL_I32_I24_VOP3A', 0x5),
+                ('V_MAX_F32_VOP3A', 0x6),
+                ('V_MAD_F32', 0x7),
+                ('V_MAD_U32_U24', 0x8),
+                ('V_BFE_U32', 0x9),
+                ('V_BFE_I32', 0xa),
+                ('V_BFI_B32', 0xb),
+                ('V_FMA_F32', 0xc),
+                ('V_FMA_F64', 0xd),
+                ('V_ALIGNBIT_B32', 0xe),
+                ('V_MAX3_I32', 0xf),
+                #('#V_DIV_FIXUP_F64', 0x10),
+                #('#V_DIV_FMAS_F64', 0x10),
+                ('V_MIN_F64', 0x13),
+                ('V_MAX_F64', 0x14),
+                ('V_MUL_LO_U32', 0x15),
+                ('V_MUL_HI_U32', 0x16),
+                ('V_MUL_LO_I32', 0x17),
+                ('V_FRACT_F32_VOP3A', 0x18),
+                ('V_CMP_LT_F32_VOP3A', 0x19),
+                ('V_CMP_EQ_F32_VOP3A', 0x1a),
+                ('V_CMP_GT_F32_VOP3A', 0x1b),
+                ('V_CMP_NLE_F32_VOP3A', 0x1c),
+                ('V_CMP_NEQ_F32_VOP3A', 0x1d),
+                ('V_CMP_NLT_F32_VOP3A', 0x1e),
+                ('V_CMP_LT_I32_VOP3A', 0x1f),
+                ('V_CMP_EQ_I32_VOP3A', 0x20),
+                ('V_CMP_LE_I32_VOP3A', 0x21),
+                ('V_CMP_GT_I32_VOP3A', 0x22),
+                ('V_CMP_GE_I32_VOP3A', 0x23),
+                ('V_CMP_NE_I32_VOP3A', 0x24),
+                ('V_CMPX_EQ_I32_VOP3A', 0x25),
+                ('V_CMP_OP16_F64_VOP3A', 0x26),
+                ('V_CMP_CLASS_F64_VOP3A', 0x27),
+                ('V_CMP_LT_U32_VOP3A', 0x28),
+                ('V_CMP_LE_U32_VOP3A', 0x29),
+                ('V_CMP_GT_U32_VOP3A', 0x2a),
+                ('V_CMP_LG_U32_VOP3A', 0x2b),
+                ('V_CMP_GE_U32_VOP3A', 0x2c),
+                ('V_CMP_LT_U64_VOP3A', 0x2d),
+                ('V_LSHR_B64', 0x30),
+                ('V_MUL_F64', 0x32),
+                ('V_LDEXP_F64', 0x33),
+                ('V_CMP_LE_F32_VOP3A', 0x38),
+                #('#V_MED3_I32_VOP3A', 0x39),
+                ('V_MED3_I32', 0x3a)
+                ]
     def __init__(self, name=''):
         super().__init__(name)
-
-    class OpcodeEnum(Enum):
-        V_CNDMASK_B32_VOP3A     = 0x1
-        V_ADD_F32_VOP3A         = 0x2
-        V_SUBREV_F32_VOP3A      = 0x3
-        V_MUL_F32_VOP3A         = 0x4
-        V_MUL_I32_I24_VOP3A     = 0x5
-        V_MAX_F32_VOP3A         = 0x6
-        V_MAD_F32               = 0x7
-        V_MAD_U32_U24           = 0x8
-        V_BFE_U32               = 0x9
-        V_BFE_I32               = 0xa
-        V_BFI_B32               = 0xb
-        V_FMA_F32               = 0xc
-        V_FMA_F64               = 0xd
-        V_ALIGNBIT_B32          = 0xe
-        V_MAX3_I32              = 0xf
-        #V_DIV_FIXUP_F64         = 0x10
-        #V_DIV_FMAS_F64         = 0x10
-        V_LSHL_B64              = 0x11
-        V_ASHR_I64              = 0x12
-        V_MIN_F64               = 0x13
-        V_MAX_F64               = 0x14
-        V_MUL_LO_U32            = 0x15
-        V_MUL_HI_U32            = 0x16
-        V_MUL_LO_I32            = 0x17
-        V_FRACT_F32_VOP3A       = 0x18
-        V_CMP_LT_F32_VOP3A      = 0x19
-        V_CMP_EQ_F32_VOP3A      = 0x1a
-        V_CMP_GT_F32_VOP3A      = 0x1b
-        V_CMP_NLE_F32_VOP3A     = 0x1c
-        V_CMP_NEQ_F32_VOP3A     = 0x1d
-        V_CMP_NLT_F32_VOP3A     = 0x1e
-        V_CMP_LT_I32_VOP3A      = 0x1f
-        V_CMP_EQ_I32_VOP3A      = 0x20
-        V_CMP_LE_I32_VOP3A      = 0x21
-        V_CMP_GT_I32_VOP3A      = 0x22
-        V_CMP_GE_I32_VOP3A      = 0x23
-        V_CMP_NE_I32_VOP3A      = 0x24
-        V_CMPX_EQ_I32_VOP3A     = 0x25
-        V_CMP_OP16_F64_VOP3A    = 0x26
-        V_CMP_CLASS_F64_VOP3A   = 0x27
-        V_CMP_LT_U32_VOP3A      = 0x28
-        V_CMP_LE_U32_VOP3A      = 0x29
-        V_CMP_GT_U32_VOP3A      = 0x2a
-        V_CMP_LG_U32_VOP3A      = 0x2b
-        V_CMP_GE_U32_VOP3A      = 0x2c
-        V_CMP_LT_U64_VOP3A      = 0x2d
-        V_LSHR_B64              = 0x30
-        V_ADD_F64               = 0x31
-        V_MUL_F64               = 0x32
-        V_LDEXP_F64             = 0x33
-        V_CMP_LE_F32_VOP3A      = 0x38
-        #V_MED3_I32_VOP3A        = 0x39
-        V_MED3_I32              = 0x3a
 
     def genGrammarInstrClass(self):
         return self.getInstrDefName() + " vreg ',' generic_reg ',' generic_reg ',' generic_reg"
@@ -1113,11 +1205,12 @@ class InstrVALU_VOP3B(InstrValu):
                 ("ssrc2", c_uint, 8),
                 ("lit_const", c_uint, 16)]
 
+    _optable_ = [
+                ('V_ADDC_U32', 0x1)
+                ]
+
     def __init__(self, name=''):
         super().__init__(name)
-
-    class OpcodeEnum(Enum):
-        V_ADDC_U32     = 0x1
 
     def genGrammarInstrClass(self):
         return self.getInstrDefName() + " vreg ',' generic_reg_or_number ',' vreg (',' special_operand)* "
@@ -1163,25 +1256,27 @@ class InstrVALU_VOP3B(InstrValu):
  #------------------------------
 class InstrSALU_SOP1(InstrSalu):
     _fields_ = [("ssrc0", c_uint, 8),
-                ("op", c_uint, 8),
-                ("sdst", c_uint, 7),
+                ("op", c_uint, 7),
+                ("sdst", c_uint, 8),
                 ("enc", c_uint, 9),
-                ("lit_const", c_uint, 32)]
+                ('ext',     c_uint, 28),
+                ('ext_enc', c_uint, 4)]
 
+    _optable_ = [
+                ('S_MOV_B32', 0x3),
+                ('S_MOV_B64', 0x4),
+                ('S_NOT_B32', 0x7),
+                ('S_WQM_B64', 0x11),
+                ('S_SWAPPC_B64', 0x12),
+                ('S_AND_SAVEEXEC_B64', 0x13)
+                ]
 
     def __init__(self, name=''):
         super().__init__(name)
 
-    class OpcodeEnum(Enum):
-        S_MOV_B32                = 0x3
-        S_MOV_B64                = 0x4
-        S_NOT_B32                = 0x7
-        S_WQM_B64                = 0x11
-        S_SWAPPC_B64             = 0x12
-        S_AND_SAVEEXEC_B64       = 0x13
 
     def genGrammarInstrClass(self):
-        return self.getInstrDefName() + " sreg ',' sreg"
+        return self.getInstrDefName() + " sreg_or_tcc ',' sreg_or_tcc"
 
     def addOperand(self, operand):
         super().addOperand(operand)
@@ -1200,10 +1295,11 @@ class InstrSALU_SOP1(InstrSalu):
             self.ssrc0 = operand.idx
 
     def getInstrSize(self):
-        if self.ssrc0 == 0xFF:
-            return self.instr_size
+        if self.ext_enc != 0x0:
+            return 8
         else:
             return 4
+
 
 
 class InstrSALU_SOP2(InstrSalu):
@@ -1217,26 +1313,27 @@ class InstrSALU_SOP2(InstrSalu):
     def __init__(self, name=''):
         super().__init__(name)
 
-    class OpcodeEnum(Enum):
-        S_ADD_U32                = 0x1
-        S_ADD_I32                = 0x2
-        S_SUB_I32                = 0x3
-        S_MIN_U32                = 0x4
-        S_MAX_I32                = 0x5
-        S_MAX_U32                = 0x6
-        S_CSELECT_B32            = 0x7
-        S_AND_B32                = 0x8
-        S_AND_B64                = 0x10
-        S_OR_B32                = 0x11
-        S_OR_B64                = 0x12
-        S_XOR_B64                = 0x13
-        S_ANDN2_B64                = 0x14
-        S_NAND_B64                = 0x15
-        S_LSHL_B32                = 0x16
-        S_LSHR_B32                = 0x17
-        S_ASHR_I32                = 0x18
-        S_MUL_I32                = 0x19
-        S_BFE_I32                = 0x1a
+    _optable_ = [
+                ('S_ADD_U32', 0x1),
+                ('S_ADD_I32', 0x2),
+                ('S_SUB_I32', 0x3),
+                ('S_MIN_U32', 0x4),
+                ('S_MAX_I32', 0x5),
+                ('S_MAX_U32', 0x6),
+                ('S_CSELECT_B32', 0x7),
+                ('S_AND_B32', 0x8),
+                ('S_AND_B64', 0x10),
+                ('S_OR_B32', 0x11),
+                ('S_OR_B64', 0x12),
+                ('S_XOR_B64', 0x13),
+                ('S_ANDN2_B64', 0x14),
+                ('S_NAND_B64', 0x15),
+                ('S_LSHL_B32', 0x16),
+                ('S_LSHR_B32', 0x17),
+                ('S_ASHR_I32', 0x18),
+                ('S_MUL_I32', 0x19),
+                ('S_BFE_I32', 0x1a)
+                ]
 
     def genGrammarInstrClass(self):
         #return self.getInstrDefName() + " sreg ',' sreg ',' alu_expr_list ('#' lop_imm)?"
@@ -1273,14 +1370,16 @@ class InstrSALU_SOPK(InstrSalu):
                 ("op", c_uint, 5),
                 ("enc", c_uint, 4)]
 
+    _optable_ = [
+                ('S_MOVK_I32', 0x1),
+                ('S_CMPK_LE_U32', 0x2),
+                ('S_ADDK_I32', 0x3),
+                ('S_MULK_I32', 0x4)
+                ]
+
     def __init__(self, name=''):
         super().__init__(name)
 
-    class OpcodeEnum(Enum):
-        S_MOVK_I32                = 0x1
-        S_CMPK_LE_U32             = 0x2
-        S_ADDK_I32                = 0x3
-        S_MULK_I32                = 0x4
 
     def genGrammarInstrClass(self):
         return self.getInstrDefName() + " sreg ',' number"
@@ -1309,19 +1408,19 @@ class InstrSALU_SOPC(InstrSalu):
                 ("enc", c_uint, 9),
                 ("lit_const", c_uint, 32)]
 
+    _optable_ = [
+                ('S_CMP_EQ_I32', 0x1),
+                ('S_CMP_GT_I32', 0x2),
+                ('S_CMP_GE_I32', 0x3),
+                ('S_CMP_LT_I32', 0x4),
+                ('S_CMP_LE_I32', 0x5),
+                ('S_CMP_GT_U32', 0x6),
+                ('S_CMP_GE_U32', 0x7),
+                ('S_CMP_LE_U32', 0x8)
+                ]
 
     def __init__(self, name=''):
         super().__init__(name)
-
-    class OpcodeEnum(Enum):
-        S_CMP_EQ_I32                = 0x1
-        S_CMP_GT_I32                = 0x2
-        S_CMP_GE_I32                = 0x3
-        S_CMP_LT_I32                = 0x4
-        S_CMP_LE_I32                = 0x5
-        S_CMP_GT_U32                = 0x6
-        S_CMP_GE_U32                = 0x7
-        S_CMP_LE_U32                = 0x8
 
     def genGrammarInstrClass(self):
         return self.getInstrDefName() + " sreg ',' sreg"
@@ -1349,29 +1448,65 @@ class InstrSALU_SOPC(InstrSalu):
             return 4
 
 class InstrSALU_SOPP(InstrSalu):
-    _fields_ = [("simm16", c_uint, 16),
-                ("op", c_uint, 7),
-                ("enc", c_uint, 9)]
+    _fields_ = [
+                ("pred", c_uint, 3),
+                ("simm12", c_uint, 12),
+                ("tcc", c_uint, 3),
+                ("op", c_uint, 5),
+                ("enc", c_uint, 9),
+                ('ext',     c_uint, 28),
+                ('ext_enc', c_uint, 4)]
 
+    _optable_ = [
+                ('S_CBRANCH_TCCZ', 0x0),
+                ('S_CBRANCH_TCCNZ', 0x1),
+                #('S_CBRANCH_SCC0', 0x3),
+                #('S_CBRANCH_SCC1', 0x4),
+                ('S_CBRANCH_SCCZ', 0x2),
+                ('S_CBRANCH_SCCNZ', 0x3),
+                ('S_CBRANCH_EXECZ', 0x4),
+                ('S_CBRANCH_EXECNZ', 0x5),
+                ('S_BRANCH', 0x8),
+                ('S_BARRIER', 0x9),
+                ('S_WAITCNT', 0xa),
+                ('S_PHI', 0xb),
+                ('S_EXIT', 0xc)
+                ]
 
     def __init__(self, name=''):
         super().__init__(name)
 
-    class OpcodeEnum(Enum):
-        S_EXIT                  = 0x1
-        S_BRANCH                = 0x2
-        S_CBRANCH_SCC0          = 0x3
-        S_CBRANCH_SCC1          = 0x4
-        S_CBRANCH_VCCZ          = 0x5
-        S_CBRANCH_VCCNZ         = 0x6
-        S_CBRANCH_EXECZ         = 0x7
-        S_CBRANCH_EXECNZ        = 0x8
-        S_BARRIER               = 0x9
-        S_WAITCNT               = 0xa
-        S_PHI                   = 0xb
+    def getInstrSize(self):
+        if self.ext_enc != 0x0:
+            return 8
+        else:
+            return 4
+
+    def isBranchOp(self):
+        return self.op <= self.optable['S_BRANCH'].value
+
+    def isCBranchOp(self):
+        return self.op <= self.optable['S_CBRANCH_EXECNZ'].value
+
+    def updateOperand(self, operand_num):
+        #pdb.set_trace()
+        operand = self.operands[operand_num - 1]
+        if operand_num == 1:
+            if (isinstance(operand, int)):
+                self.simm12 = operand
+            else:
+                # TODO extend tcc for s_branch target
+                pdb.set_trace()
+        elif operand_num == 2:
+            if self.isCBranchOp():
+                assert(isinstance(operand, Reg))
+                assert(operand.rtype == Reg.RegType.TCC)
+                self.tcc = operand.idx
+            else:
+                pdb.set_trace()
 
     def genGrammarInstrClass(self):
-        return self.getInstrDefName() + " (number | wait_expr (',' wait_expr)*)?"
+        return self.getInstrDefName() + " ( branch_target (',' sreg_or_tcc)? | number | wait_expr (',' wait_expr)*)?"
 
 class InstrSMEM_SLS(InstrSmem):
     _fields_ = [("offset", c_uint, 8),
@@ -1381,21 +1516,22 @@ class InstrSMEM_SLS(InstrSmem):
                 ("op", c_uint, 5),
                 ("enc", c_uint, 5)]
 
+    _optable_ = [
+                ('S_LOAD_DWORD', 0x0),
+                ('S_LOAD_DWORDX2', 0x1),
+                ('S_LOAD_DWORDX4', 0x2),
+                ('S_LOAD_DWORDX8', 0x3),
+                ('S_LOAD_DWORDX16', 0x4)
+                #('#S_BUFFER_LOAD_DWORD', 0x5),
+                #('#S_BUFFER_LOAD_DWORDX2', 0x6),
+                #('#S_BUFFER_LOAD_DWORDX4', 0x7),
+                #('#S_BUFFER_LOAD_DWORDX8', 0x8),
+                #('#S_BUFFER_LOAD_DWORDX16', 0x9)
+                ]
 
     def __init__(self, name=''):
         super().__init__(name)
 
-    class OpcodeEnum(Enum):
-        S_LOAD_DWORD                = 0x0
-        S_LOAD_DWORDX2                = 0x1
-        S_LOAD_DWORDX4                = 0x2
-        S_LOAD_DWORDX8                = 0x3
-        S_LOAD_DWORDX16               = 0x4
-        #S_BUFFER_LOAD_DWORD           = 0x5
-        #S_BUFFER_LOAD_DWORDX2         = 0x6
-        #S_BUFFER_LOAD_DWORDX4         = 0x7
-        #S_BUFFER_LOAD_DWORDX8         = 0x8
-        #S_BUFFER_LOAD_DWORDX16        = 0x9
 
     def genGrammarInstrClass(self):
         return self.getInstrDefName() + " (sreg | ident) ',' sreg ',' (sreg | number) ('%' mspace_all)? "
@@ -1435,22 +1571,23 @@ class InstrDMEM_DLS(InstrDmem):
                 ("data1", c_uint, 8),
                 ("vdst", c_uint, 8)]
 
-    def __init__(self, name=''):
-       super().__init__(name)
+    _optable_ = [
+                ('D_ADD_U32', 0x1),
+                ('D_INC_U32', 0x2),
+                ('D_WRITE_B32', 0x3),
+                ('D_WRITE2_B32', 0x4),
+                ('D_WRITE_B8', 0x5),
+                ('D_WRITE_B16', 0x6),
+                ('D_READ_B32', 0x7),
+                ('D_READ2_B32', 0x8),
+                ('D_READ_I8', 0x9),
+                ('D_READ_U8', 0xa),
+                ('D_READ_I16', 0xb),
+                ('D_READ_U16', 0xc)
+                ]
 
-    class OpcodeEnum(Enum):
-        D_ADD_U32                = 0x1
-        D_INC_U32                = 0x2
-        D_WRITE_B32              = 0x3
-        D_WRITE2_B32             = 0x4
-        D_WRITE_B8               = 0x5
-        D_WRITE_B16              = 0x6
-        D_READ_B32               = 0x7
-        D_READ2_B32              = 0x8
-        D_READ_I8                = 0x9
-        D_READ_U8                = 0xa
-        D_READ_I16               = 0xb
-        D_READ_U16               = 0xc
+    def __init__(self, name=''):
+        super().__init__(name)
 
     def genGrammarInstrClass(self):
         return self.getInstrDefName() + " (vreg | ident | mem_expr_list) ',' mem_expr_list"
@@ -1474,50 +1611,71 @@ class InstrVMEM_VMUBUF(InstrVmem):
                 ("tfe",   c_uint, 1),
                 ("soffset", c_uint, 8)]
 
+    _optable_ = [
+                ('V_BUFFER_LOAD_SBYTE', 0x1),
+                ('V_BUFFER_LOAD_DWORD', 0x2),
+                ('V_BUFFER_STORE_SBYTE', 0x3),
+                ('V_BUFFER_STORE_DWORD', 0x4),
+                ('V_BUFFER_ATOMIC_ADD', 0x5)
+                ]
 
     def __init__(self, name=''):
        super().__init__(name)
-
-    class OpcodeEnum(Enum):
-        V_BUFFER_LOAD_SBYTE                = 0x1
-        V_BUFFER_LOAD_DWORD                = 0x2
-        V_BUFFER_STORE_SBYTE               = 0x3
-        V_BUFFER_STORE_DWORD               = 0x4
-        V_BUFFER_ATOMIC_ADD                = 0x5
-
 
     def genGrammarInstrClass(self):
         return self.getInstrDefName() + " vreg ',' vreg ',' sreg ',' sreg"
 
 class InstrVMEM_VLS(InstrVmem):
-    _fields_ = [("offset", c_uint, 6),
-                #("imm",   c_uint, 1),
+    _fields_ = [
+                ("offset", c_uint, 6),
                 ("vaddr", c_uint, 6),
                 ("ssrc0_", c_uint, 1),
                 ("vdata", c_uint, 7),
                 ("slc",   c_uint, 1),
                 ("op",    c_uint, 5),
-                ("enc",   c_uint, 6)]
+                ("enc",   c_uint, 6),
+                ('ext',     c_uint, 28),
+                ('ext_enc', c_uint, 4)]
 
+    class _fields_e1_(LittleEndianStructure):
+        _pack_ = 1
+        _fields_ = [("imm", c_uint, 28),
+                ('ext_enc', c_uint, 4)
+                ]
+
+    class _fields_e2_(LittleEndianStructure):
+        _pack_ = 1
+        _fields_ = [("imm", c_uint, 28),
+                ('ext_enc', c_uint, 4)
+                ]
 
     def __init__(self, name=''):
+        self.ext1 = self._fields_e1_()
+        self.ext2 = self._fields_e2_()
         super().__init__(name)
 
-    class OpcodeEnum(Enum):
-        #FLAT_LOAD_SBYTE                = 0x1
-        V_LOAD_DWORD                 = 0x2
-        V_LOAD_DWORDX2               = 0x3
-        V_LOAD_DWORDX4               = 0x4
-        #FLAT_STORE_SBYTE               = 0x3
-        V_STORE_DWORD                = 0x5
-        #FLAT_ATOMIC_ADD                = 0x5
 
+    _optable_ = [
+                ('V_LOAD_DWORD',  0x2),
+                ('V_LOAD_DWORDX2',0x3),
+                ('V_LOAD_DWORDX4',0x4),
+                ('V_STORE_DWORD', 0x5)
+                #('#FLAT_LOAD_SBYTE', 0x1),
+                #('#FLAT_STORE_SBYTE', 0x3),
+                #('#FLAT_ATOMIC_ADD', 0x5),
+            ]
+
+    def getInstrSize(self):
+        if self.ext_enc != 0x0:
+            return 8
+        else:
+            return 4
 
     def genGrammarInstrClass(self):
         return self.getInstrDefName() + " vreg ',' (vreg | dreg | vmem_special_operand) ',' (vreg | dreg | number) ('%' mspace_all)?"
 
     def isStoreOp(self):
-        return self.op >= self.OpcodeEnum.V_STORE_DWORD.value
+        return self.op >= self.optable['V_STORE_DWORD'].value
 
     def updateOperand(self, operand_num):
         operand = self.operands[operand_num - 1]

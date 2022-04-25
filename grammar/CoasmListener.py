@@ -233,6 +233,15 @@ class CoasmListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by CoasmParser#lreg.
+    def enterLreg(self, ctx:CoasmParser.LregContext):
+        pass
+
+    # Exit a parse tree produced by CoasmParser#lreg.
+    def exitLreg(self, ctx:CoasmParser.LregContext):
+        pass
+
+
     # Enter a parse tree produced by CoasmParser#vreg_or_number.
     def enterVreg_or_number(self, ctx:CoasmParser.Vreg_or_numberContext):
         pass
@@ -350,12 +359,12 @@ class CoasmListener(ParseTreeListener):
         pass
 
 
-    # Enter a parse tree produced by CoasmParser#special_reg.
-    def enterSpecial_reg(self, ctx:CoasmParser.Special_regContext):
+    # Enter a parse tree produced by CoasmParser#sreg_or_tcc.
+    def enterSreg_or_tcc(self, ctx:CoasmParser.Sreg_or_tccContext):
         pass
 
-    # Exit a parse tree produced by CoasmParser#special_reg.
-    def exitSpecial_reg(self, ctx:CoasmParser.Special_regContext):
+    # Exit a parse tree produced by CoasmParser#sreg_or_tcc.
+    def exitSreg_or_tcc(self, ctx:CoasmParser.Sreg_or_tccContext):
         pass
 
 
@@ -374,6 +383,15 @@ class CoasmListener(ParseTreeListener):
 
     # Exit a parse tree produced by CoasmParser#vmem_special_operand.
     def exitVmem_special_operand(self, ctx:CoasmParser.Vmem_special_operandContext):
+        pass
+
+
+    # Enter a parse tree produced by CoasmParser#branch_target.
+    def enterBranch_target(self, ctx:CoasmParser.Branch_targetContext):
+        pass
+
+    # Exit a parse tree produced by CoasmParser#branch_target.
+    def exitBranch_target(self, ctx:CoasmParser.Branch_targetContext):
         pass
 
 

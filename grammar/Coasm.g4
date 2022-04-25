@@ -66,13 +66,15 @@ number: DIGIT | HEX_NUMBER | FP_NUMBER;
 generic_reg: register_ | ident;
 
 
-register_: sreg | vreg | dreg;
+register_: sreg | vreg | dreg | lreg;
 
 sreg: ('-' | '!')? (SREG | SREG_INDEX);
 
 vreg: ('-' | '!')? (VREG | VREG_INDEX);
 
 dreg: ('-' | '!')? (DREG | DREG_INDEX);
+
+lreg: ('-' | '!')? (LREG | LREG_INDEX);
 
 vreg_or_number: vreg | number;
 
@@ -90,13 +92,15 @@ param_: PARAM;
 global_: GLOBAL_;
 shared_: SHARED_;
 
-special_operand : ident ':' special_reg;
-special_reg: sreg | tcc;
+special_operand : ident ':' sreg_or_tcc;
+sreg_or_tcc: sreg | tcc;
 
 // use in VOPC
 special_cc_reg: sreg | tcc;
 
 vmem_special_operand : ident;
+
+branch_target : ident;
 
 builtin_operand : ident;
 
@@ -138,18 +142,18 @@ lop_imm
 
 
 instrvalu:
-		VALU_VOP2 vreg ',' generic_reg_or_number ',' vreg (',' special_operand)* 
+		VALU_VOP2 vreg ',' vreg ',' generic_reg_or_number (',' special_operand)*
          | VALU_VOP1 vreg ',' (register_ | builtin_operand)
-         | VALU_VOPCspecial_cc_reg ',' vreg ',' generic_reg
+         | VALU_VOPC sreg_or_tcc ',' vreg ',' generic_reg
          | VALU_VOP3A vreg ',' generic_reg ',' generic_reg ',' generic_reg
          | VALU_VOP3B vreg ',' generic_reg_or_number ',' vreg (',' special_operand)* ;
 
 instrsalu:
-		SALU_SOP1 sreg ',' sreg
+		SALU_SOP1 sreg_or_tcc ',' sreg_or_tcc
          | SALU_SOP2 sreg ',' sreg ',' sreg
          | SALU_SOPK sreg ',' number
          | SALU_SOPC sreg ',' sreg
-         | SALU_SOPP (number | wait_expr (',' wait_expr)*)?;
+         | SALU_SOPP ( branch_target (',' sreg_or_tcc)? | number | wait_expr (',' wait_expr)*)?;
 
 instrsmem:
 		SMEM_SLS (sreg | ident) ',' sreg ',' (sreg | number) ('%' mspace_all)? ;
@@ -207,6 +211,10 @@ REG: '.' R E G;
 TID: '%' T I D;
 PC: '%' P C;
 
+LREG: L (R E G)? DIGIT;
+
+LREG_INDEX: L (R E G)? '[' DIGIT ':' DIGIT ']';
+
 DREG: D (R E G)? DIGIT;
 
 DREG_INDEX: D (R E G)? '[' DIGIT ':' DIGIT ']';
@@ -262,14 +270,17 @@ VALU_VOP2:
          | V '_' X O R '_' B '3' '2'
          | V '_' B F M '_' B '3' '2'
          | V '_' M A C '_' F '3' '2'
-         | V '_' M A D M K '_' F '3' '2'
          | V '_' A D D '_' I '3' '2' '_' I '3' '2'
+         | V '_' A D D '_' I '6' '4' '_' I '6' '4'
          | V '_' S U B '_' I '3' '2'
          | V '_' S U B R E V '_' I '3' '2'
          | V '_' A D D '_' U '3' '2'
          | V '_' A D D C O '_' U '3' '2'
          | V '_' S U B '_' U '3' '2'
-         | V '_' S U B R E V '_' U '3' '2') E32?;
+         | V '_' S U B R E V '_' U '3' '2'
+         | V '_' L S H L '_' B '6' '4'
+         | V '_' A S H R '_' I '6' '4'
+         | V '_' A D D '_' F '6' '4') E32?;
 
 VALU_VOP1:
 		(V '_' N O P
@@ -336,8 +347,6 @@ VALU_VOP3A:
          | V '_' F M A '_' F '6' '4'
          | V '_' A L I G N B I T '_' B '3' '2'
          | V '_' M A X '3' '_' I '3' '2'
-         | V '_' L S H L '_' B '6' '4'
-         | V '_' A S H R '_' I '6' '4'
          | V '_' M I N '_' F '6' '4'
          | V '_' M A X '_' F '6' '4'
          | V '_' M U L '_' L O '_' U '3' '2'
@@ -366,7 +375,6 @@ VALU_VOP3A:
          | V '_' C M P '_' G E '_' U '3' '2' '_' V O P '3' A
          | V '_' C M P '_' L T '_' U '6' '4' '_' V O P '3' A
          | V '_' L S H R '_' B '6' '4'
-         | V '_' A D D '_' F '6' '4'
          | V '_' M U L '_' F '6' '4'
          | V '_' L D E X P '_' F '6' '4'
          | V '_' C M P '_' L E '_' F '3' '2' '_' V O P '3' A
@@ -421,17 +429,17 @@ SALU_SOPC:
          | S '_' C M P '_' L E '_' U '3' '2') E32?;
 
 SALU_SOPP:
-		(S '_' E X I T
-         | S '_' B R A N C H
-         | S '_' C B R A N C H '_' S C C '0'
-         | S '_' C B R A N C H '_' S C C '1'
-         | S '_' C B R A N C H '_' V C C Z
-         | S '_' C B R A N C H '_' V C C N Z
+		(S '_' C B R A N C H '_' T C C Z
+         | S '_' C B R A N C H '_' T C C N Z
+         | S '_' C B R A N C H '_' S C C Z
+         | S '_' C B R A N C H '_' S C C N Z
          | S '_' C B R A N C H '_' E X E C Z
          | S '_' C B R A N C H '_' E X E C N Z
+         | S '_' B R A N C H
          | S '_' B A R R I E R
          | S '_' W A I T C N T
-         | S '_' P H I) E32?;
+         | S '_' P H I
+         | S '_' E X I T) E32?;
 
 SMEM_SLS:
 		(S '_' L O A D '_' D W O R D

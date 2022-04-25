@@ -66,13 +66,15 @@ number: DIGIT | HEX_NUMBER | FP_NUMBER;
 generic_reg: register_ | ident;
 
 
-register_: sreg | vreg | dreg;
+register_: sreg | vreg | dreg | lreg;
 
 sreg: ('-' | '!')? (SREG | SREG_INDEX);
 
 vreg: ('-' | '!')? (VREG | VREG_INDEX);
 
 dreg: ('-' | '!')? (DREG | DREG_INDEX);
+
+lreg: ('-' | '!')? (LREG | LREG_INDEX);
 
 vreg_or_number: vreg | number;
 
@@ -90,13 +92,15 @@ param_: PARAM;
 global_: GLOBAL_;
 shared_: SHARED_;
 
-special_operand : ident ':' special_reg;
-special_reg: sreg | tcc;
+special_operand : ident ':' sreg_or_tcc;
+sreg_or_tcc: sreg | tcc;
 
 // use in VOPC
 special_cc_reg: sreg | tcc;
 
 vmem_special_operand : ident;
+
+branch_target : ident;
 
 builtin_operand : ident;
 
@@ -185,6 +189,10 @@ REG: '.' R E G;
 
 TID: '%' T I D;
 PC: '%' P C;
+
+LREG: L (R E G)? DIGIT;
+
+LREG_INDEX: L (R E G)? '[' DIGIT ':' DIGIT ']';
 
 DREG: D (R E G)? DIGIT;
 

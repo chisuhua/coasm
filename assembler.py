@@ -314,6 +314,7 @@ class DefPhase(CoasmListener):
 
     def enterIdent(self, ctx):
         ident = ctx.getText()
+        info(ctx.start, "ident {}".format(ident))
         if self.cur_instr is not None:
             if ident in self.id_stype:
                 stype = self.id_stype[ident]
@@ -322,6 +323,7 @@ class DefPhase(CoasmListener):
                     pdb.set_trace()
                     self.cur_instr.addReg(reg_alias[ident])
                 else:
+                    pdb.set_trace()
                     self.cur_instr.addOperand(ident)
             else:
                 self.id_stype[ident] = None
@@ -579,14 +581,30 @@ class DefPhase(CoasmListener):
         reg = Reg(ctx.getText())
         self.cur_instr.addReg(reg)
         pass
+
+    def exitLreg(self, ctx:CoasmParser.LregContext):
+        reg = Reg(ctx.getText())
+        self.cur_instr.addReg(reg)
+        pass
+
+    def exitTcc(self, ctx:CoasmParser.TccContext):
+        reg = Reg(ctx.getText())
+        self.cur_instr.addReg(reg)
+        pass
+
+    #def exitSreg_or_tcc(self, ctx:CoasmParser.Sreg_or_tccContext):
+    #    reg = Reg(ctx.getText())
+    #    self.cur_instr.addReg(reg)
+
     # special operand which is operand_type:special_reg
     def exitSpecial_operand(self, ctx:CoasmParser.Special_operandContext):
         operand_type, reg_str = ctx.getText().split(":")
         self.cur_instr.addSpecialOperand(UnresolvedReg.get_kind(operand_type), reg_str)
         pass
 
-    def exitSpecial_cc_reg(self, ctx:CoasmParser.Special_cc_regContext):
-        self.cur_instr.addSpecialCCReg(ctx.getText())
+    #def exitSpecial_cc_reg(self, ctx:CoasmParser.Special_cc_regContext):
+    #    pdb.set_trace()
+    #    self.cur_instr.addSpecialCCReg(ctx.getText())
 
     def exitBuiltin_operand(self, ctx:CoasmParser.Builtin_operandContext):
         self.cur_instr.addBuiltinOperand(ctx.getText())
@@ -594,6 +612,11 @@ class DefPhase(CoasmListener):
     # Exit a parse tree produced by CoasmParser#vmem_special_operand.
     def exitVmem_special_operand(self, ctx:CoasmParser.Vmem_special_operandContext):
         self.cur_instr.addSpecialOperand(ctx.getText())
+        pass
+
+    def exitBranch_target(self, ctx:CoasmParser.Branch_targetContext):
+        #pdb.set_trace()
+        self.cur_instr.addOperand(ctx.getText())
         pass
 
     # Exit a parse tree produced by CoasmParser#op_mspace.
@@ -778,10 +801,11 @@ class RefPhase(CoasmListener):
 
             # collect unresolved instr
             for instr in func.instrs:
-                print("process instr {}".format(instr.name))
                 if instr.unresolved:
+                    print("collect unresolved instr {}".format(instr.name))
                     kernel.unresolved_instr.append(instr)
-            # update built reg num
+
+            # update built reg num before normal register
             # step1. update kernel.control if asm user builtin not define in meta
             for instr in kernel.unresolved_instr:
                 print("process unresolve instr {}".format(instr))
@@ -838,6 +862,20 @@ class RefPhase(CoasmListener):
                         solved_operand = Reg(builtin_reg[operand.name])
                         instr.operands[i] = solved_operand
                         instr.updateOperand(operand_num)
+
+            #for instr in func.instrs:
+            #    instr.unresolved = False
+            #    for operand in instr.operands:
+            #        if isinstance(operand, UnresolvedReg):
+            #            instr.unresolved = True
+
+            #kernel.unresolved_instr = []
+            # re-collect unresolved instr
+            #for instr in func.instrs:
+            #    if instr.unresolved:
+            #        print("collect unresolved instr {}".format(instr.name))
+            #        kernel.unresolved_instr.append(instr)
+
 
             sreg_num = sreg_builtin_idx
             vreg_num = vreg_builtin_idx
@@ -912,10 +950,12 @@ class RefPhase(CoasmListener):
                 else:
                     for idx in range(reg.idx, reg.end_idx + 1):
                         assert(idx in usage)
+                    reg.idx = usage[reg.idx]
+                    reg.end_idx = usage[reg.end_idx]
 
             # remapping regnumber
             for instr in func.instrs:
-                print("process instr {}".format(instr.name))
+                #print("\nprocess instr {}".format(instr.name))
                 for i, reg in enumerate(instr.regs):
                     #print("process reg {}, reg.idx={}, reg.end_idx={}".format(reg, reg.idx, reg.end_idx))
                     assert(isinstance(reg, Reg))
@@ -925,7 +965,7 @@ class RefPhase(CoasmListener):
                         #print("after: scalr reg idx {}, {}".format(reg.idx, reg.end_idx))
                         #print("after: scalr usage {}, free {}".format(sreg_usage, free_sreg))
                     elif reg.rtype is Reg.RegType.Vector:
-                        #print("\nbefore: vreg reg idx {}, {}".format(reg.idx, reg.end_idx))
+                        #print("before: vreg reg idx {}, {}".format(reg.idx, reg.end_idx))
                         assignReg(reg, vreg_usage, free_vreg)
                         #print("after: vreg reg idx {}, {}".format(reg.idx, reg.end_idx))
                         #print("after: vreg usage {}, free {}".format(vreg_usage, free_vreg))
@@ -992,13 +1032,39 @@ class RefPhase(CoasmListener):
                     else:
                         assert("RegType is incorrect {}".format(reg.rtype))
 
+            tcc_num = max_tcc # + 1    # add vcc
+            tcc_num = int((tcc_num + 1) / 2) * 2
+
+            # update each instr's code_pos after instr size is known
+            code_pos = func.code_pos
+            for instr in func.instrs:
+                instr.code_pos = code_pos + instr.getInstrSize()
+                code_pos = instr.code_pos
+
+            # resolve after sreg num, code-size is knonw
+            for instr in kernel.unresolved_instr:
+                for i, operand in enumerate(instr.operands):
+                    if isinstance(operand, UnresolvedReg):
+                        pass
+                    elif isinstance(operand, str) and operand in self.id_stype:
+                        print("process instr {} for unresolved stype {}".format(instr.name, operand))
+                        stype = self.id_stype[operand]
+                        if stype is Symbol.TypeEnum.REG:
+                            pass
+                        elif stype is Symbol.TypeEnum.VAR:
+                            pass
+                        elif stype is Symbol.TypeEnum.LABEL:
+                            label = func.labels[operand]
+                            #pdb.set_trace()
+                            if instr.getFmtName() == "SOPP" and instr.isBranchOp():
+                                pcrel = label.instr.code_pos - instr.code_pos
+                                instr.operands[i] = pcrel
+                            pass
+
             for instr in func.instrs:
                 for i, operand in enumerate(instr.operands):
                     operand_num = i + 1
-                    instr.updateOperand(operand_num)
-
-            tcc_num = max_tcc # + 1    # add vcc
-            tcc_num = int((tcc_num + 1) / 2) * 2
+                    #instr.updateOperand(operand_num)
 
             input_sreg_num = kernel.resource["sreg_number"]
             sreg_num = int((sreg_num + 7 ) / 8)*8    # align to 8
@@ -1155,7 +1221,7 @@ if __name__ == '__main__':
         print("after update kernel_ctl {}".format(k['.kernel_ctrl']))
 
     #binary = lief.parse("hello_elf.bin")
-    binary = lief.parse(os.path.join(os.path.split(os.path.abspath(__file__))[0], "hsaco.bin"))
+    binary = lief.parse(os.path.join(os.path.split(os.path.abspath(__file__))[0], "coasm.bin"))
     header = binary.header
 
     #header.identity_class = ELF.ELF_CLASS.CLASS64
