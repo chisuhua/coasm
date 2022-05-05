@@ -41,4 +41,13 @@ with open("opcodes.def", 'w') as f:
         instr.genInstrOpcodeDef(f, fmt);
         f.write("DEFEND({})\n\n".format(fmt))
 
+tpl = env.get_template("coasm.h.tpl")
+optype_list = ""
+for n, v in OpType._member_map_.items():
+    optype_list += ",\n{} = {}".format(n, v.value)
+tpl_out = tpl.render(OpTypeList=optype_list)
+with open(os.path.join(path, "coasm.h"), 'w') as f:
+    f.writelines(tpl_out)
+
+
 

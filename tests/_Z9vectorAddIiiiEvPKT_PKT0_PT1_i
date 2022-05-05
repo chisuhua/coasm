@@ -1,0 +1,68 @@
+	.text
+	.global _Z9vectorAddIiiiEvPKT_PKT0_PT1_i
+	.type _Z9vectorAddIiiiEvPKT_PKT0_PT1_i,@function
+_Z9vectorAddIiiiEvPKT_PKT0_PT1_i:
+bb_00:
+		v_load_u64	v[3:4],	_Z9vectorAddIiiiEvPKT_PKT0_PT1_i_param_0 % mspace:param
+		v_load_u64	v[5:6],	_Z9vectorAddIiiiEvPKT_PKT0_PT1_i_param_1 % mspace:param
+		v_load_u64	v[7:8],	_Z9vectorAddIiiiEvPKT_PKT0_PT1_i_param_2 % mspace:param
+		v_load_u32	v9,	_Z9vectorAddIiiiEvPKT_PKT0_PT1_i_param_3 % mspace:param
+bb_01:
+		v_mov_b32	v10,	block_dim_x
+		v_mov_b32	v11,	block_idx_x
+		v_mullo_i32_i32	v12,	v10,	v11
+		v_mov_b32	v13,	thread_idx_x
+		v_add_i32	v14,	v12,	v13
+bb_02:
+		v_cmp_lt_i32	tcc0,	v14,	v9
+		s_not_b32	tcc1,	tcc0
+		s_cbranch_tccz bb_05,	tcc1
+bb_03:
+		s_branch  bb_04
+bb_04:
+		v_sext_i64_i32	v[15:16],	v14
+		v_lshl_b64	v[17:18],	v[15:16],	0x2
+		v_add_i64	v[19:20],	v[3:4],	v[17:18]
+		v_load_u32	v21,	v[19:20] % mspace:flat
+		v_sext_i64_i32	v[22:23],	v14
+		v_lshl_b64	v[24:25],	v[22:23],	0x2
+		v_add_i64	v[26:27],	v[5:6],	v[24:25]
+		v_load_u32	v28,	v[26:27] % mspace:flat
+		v_add_i32	v29,	v21,	v28
+		v_sext_i64_i32	v[30:31],	v14
+		v_lshl_b64	v[32:33],	v[30:31],	0x2
+		v_add_i64	v[34:35],	v[7:8],	v[32:33]
+		v_store_u32	v29,	v[34:35] % mspace:flat
+bb_05:
+		s_exit
+
+---
+opu.kernels:
+  - .args:
+      - .address_space: global
+        .name: _Z9vectorAddIiiiEvPKT_PKT0_PT1_i_param_0
+        .offset: 0
+        .size: 8
+        .value_kind: global_buffer
+      - .address_space: global
+        .name: _Z9vectorAddIiiiEvPKT_PKT0_PT1_i_param_1
+        .offset: 8
+        .size: 8
+        .value_kind: global_buffer
+      - .address_space: global
+        .name: _Z9vectorAddIiiiEvPKT_PKT0_PT1_i_param_2
+        .offset: 16
+        .size: 8
+        .value_kind: global_buffer
+      - .address_space: global
+        .name: _Z9vectorAddIiiiEvPKT_PKT0_PT1_i_param_3
+        .offset: 24
+        .size: 4
+        .value_kind: global_buffer
+    .name: _Z9vectorAddIiiiEvPKT_PKT0_PT1_i
+    .kernel_ctrl: 69761
+    .kernel_mode: 0
+opu.version:
+  - 2
+  - 0
+...

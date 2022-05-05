@@ -1,0 +1,64 @@
+	.text
+	.global _Z9vectorAddPKfS0_Pfi
+	.type _Z9vectorAddPKfS0_Pfi,@function
+_Z9vectorAddPKfS0_Pfi:
+bb_00:
+		v_load_u64	v[3:4],	_Z9vectorAddPKfS0_Pfi_param_0 % mspace:param
+		v_load_u64	v[5:6],	_Z9vectorAddPKfS0_Pfi_param_1 % mspace:param
+		v_load_u64	v[7:8],	_Z9vectorAddPKfS0_Pfi_param_2 % mspace:param
+		v_load_u32	v9,	_Z9vectorAddPKfS0_Pfi_param_3 % mspace:param
+		v_mov_b32	v10,	block_dim_x
+		v_mov_b32	v11,	block_idx_x
+		v_mov_b32	v12,	thread_idx_x
+		v_madlo_i32_i32	v13,	v11,	v10,	v12
+		v_cmp_ge_i32	tcc0,	v13,	v9
+		s_cbranch_tccz tcc0, bb_02
+bb_01:
+		v_cvta_flat_to_global	v[13:14],	v[3:4]
+		v_mul_i64_i32	v[15:16],	v13,	0x4
+		v_add_i64	v[16:17],	v[13:14],	v[15:16]
+		v_cvta_flat_to_global	v[18:19],	v[5:6]
+		v_add_i64	v[20:21],	v[18:19],	v[15:16]
+		v_load_u32	v22,	v[20:21] % mspace:global
+		v_load_u32	v23,	v[16:17] % mspace:global
+		v_add_f32	v24,	v23,	v22
+		v_cvta_flat_to_global	v[25:26],	v[7:8]
+		v_add_i64	v[27:28],	v[25:26],	v[15:16]
+		v_store_u32	v24,	v[27:28] % mspace:global
+bb_02:
+		s_exit
+
+---
+opu.kernels:
+  - .args:
+      - .address_space: global
+        .name: _Z9vectorAddPKfS0_Pfi_param_0
+        .offset: 0
+        .size: 8
+        .value_kind: global_buffer
+      - .address_space: global
+        .name: _Z9vectorAddPKfS0_Pfi_param_1
+        .offset: 8
+        .size: 8
+        .value_kind: global_buffer
+      - .address_space: global
+        .name: _Z9vectorAddPKfS0_Pfi_param_2
+        .offset: 16
+        .size: 8
+        .value_kind: global_buffer
+      - .address_space: global
+        .name: _Z9vectorAddPKfS0_Pfi_param_3
+        .offset: 24
+        .size: 4
+        .value_kind: global_buffer
+    .name: _Z9vectorAddPKfS0_Pfi
+    .local_framesize: 0
+    .smem: 0
+    .lmem: 0
+    .cmem: 380
+    .kernel_ctrl: 69761
+    .kernel_mode: 0
+opu.version:
+  - 2
+  - 0
+...

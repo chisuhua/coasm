@@ -67,3 +67,24 @@
 #define COMMON_ENC_max_vsrc1_32e 127
 #define COMMON_ENC_max_vdst_32e_width 6
 #define COMMON_ENC_max_vdst_32e 127
+
+// address space conversion
+const unsigned long long _GLOBAL_HEAP_START = 0xC0000000;
+// Volta max shmem size is 96kB
+const unsigned long long _SHARED_MEM_SIZE_MAX = 96 * (1 << 10);
+// Volta max local mem is 16kB
+const unsigned long long _LOCAL_MEM_SIZE_MAX = 1 << 14;
+// Volta Titan V has 80 SMs
+const unsigned _MAX_STREAMING_MULTIPROCESSORS = 80;
+// Max 2048 threads / SM
+const unsigned _MAX_THREAD_PER_SM = 1 << 11;
+// MAX 64 warps / SM
+const unsigned _MAX_WARP_PER_SM = 1 << 6;
+
+const unsigned long long _TOTAL_LOCAL_MEM_PER_SM = _MAX_THREAD_PER_SM * _LOCAL_MEM_SIZE_MAX;
+const unsigned long long _TOTAL_SHARED_MEM = _MAX_STREAMING_MULTIPROCESSORS * _SHARED_MEM_SIZE_MAX;
+const unsigned long long _TOTAL_LOCAL_MEM = _MAX_STREAMING_MULTIPROCESSORS * _MAX_THREAD_PER_SM * _LOCAL_MEM_SIZE_MAX;
+
+const unsigned long long _SHARED_GENERIC_START = _GLOBAL_HEAP_START - _TOTAL_SHARED_MEM;
+const unsigned long long _LOCAL_GENERIC_START = _SHARED_GENERIC_START - _TOTAL_LOCAL_MEM;
+const unsigned long long _STATIC_ALLOC_LIMIT = _GLOBAL_HEAP_START - (_TOTAL_LOCAL_MEM + _TOTAL_SHARED_MEM);

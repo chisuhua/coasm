@@ -45,11 +45,11 @@ def info(token, msg):
 class Var(VariableSymbol):
     def __init__(self, name, dtype: DataType, mspace: MemSpace):
         super().__init__(name)
-        pdb.set_trace()
         self.size = None
         self.data_type = dtype
         self.mem_space = mspace
         self.data = []
+        self.addr = 0   # instr use addr to access Var
 
     def isPointer(self):
         return self.data_type.isPointer()
@@ -118,6 +118,8 @@ class Kernel(KernelSymbol):
         self.resource['smem_size'] = 0
         self.resource['stack_size'] = 0
         self.unresolved_instr = []
+        self.smem_size = 0
+        self.variables = {}
 
     def isbuiltinEnable(self, name):
         name = name + '_en'
@@ -157,6 +159,13 @@ class Kernel(KernelSymbol):
                 printf("[Warn] kernel {} set user_sreg_num to {}", self.cur_kernel.name, input_user_sreg_num)
         else:
             self.control["user_sreg_num"] = sreg_num
+
+    def addVariable(self, var: Var):
+        self.variables[var.name] = var
+
+    def getVariable(self, var_name):
+        assert(var_name in self.variables)
+        return self.variables[var_name]
 
     def addKernelOption(self, name, value):
         if name.find("workitem_id") > 0:
@@ -266,12 +275,12 @@ def parseNumber(token, dtype = DataType("i32")):
     return [num, valid]
 
 class DefPhase(CoasmListener):
-    def __init__(self):
+    def __init__(self, kernels):
         self.globals = None
         self.currentScope = None
         self.scopes = {}
         self.id_stype = {}
-        self.kernels = {}
+        self.kernels = kernels
         self.functions = {}
         self.variables = {}
         self.cur_function = None
@@ -287,6 +296,9 @@ class DefPhase(CoasmListener):
         self.memsize["shared"] = 0
         self.data = []
         self.unresolved_instr = {}
+        for n, v in kernel.variables.items():
+            self.id_stype[n] = Symbol.TypeEnum.VAR
+
 
     def enterProg(self, ctx):
         self.globals = GlobalScope(None)
@@ -322,8 +334,11 @@ class DefPhase(CoasmListener):
                     # ODO
                     pdb.set_trace()
                     self.cur_instr.addReg(reg_alias[ident])
+                elif stype is Symbol.TypeEnum.VAR:
+                    self.cur_instr.addOperand(ident)
                 else:
-                    pdb.set_trace()
+                    self.cur_instr.unresolved = True
+                    print("Warning add operand {}".format(ident))
                     self.cur_instr.addOperand(ident)
             else:
                 self.id_stype[ident] = None
@@ -607,7 +622,14 @@ class DefPhase(CoasmListener):
     #    self.cur_instr.addSpecialCCReg(ctx.getText())
 
     def exitBuiltin_operand(self, ctx:CoasmParser.Builtin_operandContext):
-        self.cur_instr.addBuiltinOperand(ctx.getText())
+        # FIXME we need setup all builtin symbol at first
+        # for now we all sybmol not in id_stype are builtin
+        operand = ctx.getText()
+        if operand in self.id_stype and self.id_stype[operand] is not None:
+            pass
+            #self.cur_instr.addOperand(operand)
+        else:
+            self.cur_instr.addBuiltinOperand(ctx.getText())
 
     # Exit a parse tree produced by CoasmParser#vmem_special_operand.
     def exitVmem_special_operand(self, ctx:CoasmParser.Vmem_special_operandContext):
@@ -738,14 +760,14 @@ class DefPhase(CoasmListener):
 
 #ODO setup global data array here
 class RefPhase(CoasmListener):
-    def __init__(self, glbs, scopes, id_stype, kernels, functions, variables, memsize, unresolved_instr):
+    def __init__(self, glbs, scopes, id_stype, kernels, functions, unresolved_instr):
         self.globals = glbs
         self.scopes = scopes
         self.id_stype = id_stype
         self.kernels = kernels
         self.functions = functions
-        self.variables = variables
-        self.memsize = memsize
+        #self.variables = variables
+        #self.memsize = memsize
         self.unresolved_instr = unresolved_instr
         self.currentScope = None
 
@@ -793,6 +815,7 @@ class RefPhase(CoasmListener):
             max_vreg = -1
             max_dreg = -1
             max_tcc = -1
+            max_smem = 128   # reserver first 128byte in smem for dreg builtin
 
             # NOTE: reg is start with builtin reg
             sreg_builtin_idx = -1 + MAX_RESERVED_SREG_NUM  # the start sreg index , it is kernel builtin before this idx
@@ -862,6 +885,8 @@ class RefPhase(CoasmListener):
                         solved_operand = Reg(builtin_reg[operand.name])
                         instr.operands[i] = solved_operand
                         instr.updateOperand(operand_num)
+                    else:
+                        pdb.set_trace()
 
             #for instr in func.instrs:
             #    instr.unresolved = False
@@ -931,8 +956,37 @@ class RefPhase(CoasmListener):
                     assert("find free reg failed")
                 return found
 
+            def recycleFree(free, idx):
+                # FIXME add them to free list
+                pass
 
-            def assignReg(reg : Reg, usage, free):
+
+            def killReg_(reg : Reg, usage, free):
+                for idx in range(reg.idx, reg.end_idx + 1):
+                    if idx in usage:
+                        #pdb.set_trace()
+                        del usage[idx]
+                        recycleFree(free, idx)
+
+            def killReg(reg : Reg):
+                if reg.rtype is Reg.RegType.Scalar:
+                    #print("\nbefore: scalr reg idx {}, {}".format(reg.idx, reg.end_idx))
+                    killReg_(reg, sreg_usage, free_sreg)
+                    #print("after: scalr reg idx {}, {}".format(reg.idx, reg.end_idx))
+                    #print("after: scalr usage {}, free {}".format(sreg_usage, free_sreg))
+                elif reg.rtype is Reg.RegType.Vector:
+                    #print("before: vreg reg idx {}, {}".format(reg.idx, reg.end_idx))
+                    killReg_(reg, vreg_usage, free_vreg)
+                    #print("after: vreg reg idx {}, {}".format(reg.idx, reg.end_idx))
+                    #print("after: vreg usage {}, free {}".format(vreg_usage, free_vreg))
+                elif reg.rtype is Reg.RegType.Data:
+                    killReg_(reg, dreg_usage, free_dreg)
+                elif reg.rtype is Reg.RegType.TCC:
+                    killReg_(reg, tcc_usage, free_tcc)
+                else:
+                    assert("RegType is incorrect {}".format(reg.rtype))
+
+            def assignReg_(reg : Reg, usage, free):
                 if reg.idx not in usage:
                     size = reg.end_idx - reg.idx + 1
                     new_idx = findFree(free, size)
@@ -949,88 +1003,53 @@ class RefPhase(CoasmListener):
                     reg.end_idx = new_idx - 1
                 else:
                     for idx in range(reg.idx, reg.end_idx + 1):
+                        if idx not in usage:
+                            pdb.set_trace()
                         assert(idx in usage)
                     reg.idx = usage[reg.idx]
                     reg.end_idx = usage[reg.end_idx]
 
+            def assignReg(reg : Reg):
+                if reg.rtype is Reg.RegType.Scalar:
+                    #print("\nbefore: scalr reg idx {}, {}".format(reg.idx, reg.end_idx))
+                    assignReg_(reg, sreg_usage, free_sreg)
+                    #print("after: scalr reg idx {}, {}".format(reg.idx, reg.end_idx))
+                    #print("after: scalr usage {}, free {}".format(sreg_usage, free_sreg))
+                elif reg.rtype is Reg.RegType.Vector:
+                    #print("assign before: vreg reg idx {}, {}".format(reg.idx, reg.end_idx))
+                    assignReg_(reg, vreg_usage, free_vreg)
+                    #print("assign after: vreg reg idx {}, {}".format(reg.idx, reg.end_idx))
+                    #print("assign after: vreg usage {}, free {}".format(vreg_usage, free_vreg))
+                elif reg.rtype is Reg.RegType.Data:
+                    assignReg_(reg, dreg_usage, free_dreg)
+                elif reg.rtype is Reg.RegType.TCC:
+                    assignReg_(reg, tcc_usage, free_tcc)
+                else:
+                    assert("RegType is incorrect {}".format(reg.rtype))
+
             # remapping regnumber
             for instr in func.instrs:
                 #print("\nprocess instr {}".format(instr.name))
+                dst_reg = []
+                #print("process {}".format(instr))
                 for i, reg in enumerate(instr.regs):
-                    #print("process reg {}, reg.idx={}, reg.end_idx={}".format(reg, reg.idx, reg.end_idx))
+                    #print("process {} reg {}, reg.idx={}, reg.end_idx={}".format(instr, reg, reg.idx, reg.end_idx))
                     assert(isinstance(reg, Reg))
-                    if reg.rtype is Reg.RegType.Scalar:
-                        #print("\nbefore: scalr reg idx {}, {}".format(reg.idx, reg.end_idx))
-                        assignReg(reg, sreg_usage, free_sreg)
-                        #print("after: scalr reg idx {}, {}".format(reg.idx, reg.end_idx))
-                        #print("after: scalr usage {}, free {}".format(sreg_usage, free_sreg))
-                    elif reg.rtype is Reg.RegType.Vector:
-                        #print("before: vreg reg idx {}, {}".format(reg.idx, reg.end_idx))
-                        assignReg(reg, vreg_usage, free_vreg)
-                        #print("after: vreg reg idx {}, {}".format(reg.idx, reg.end_idx))
-                        #print("after: vreg usage {}, free {}".format(vreg_usage, free_vreg))
-                    elif reg.rtype is Reg.RegType.Data:
-                        assignReg(reg, dreg_usage, free_dreg)
-                    elif reg.rtype is Reg.RegType.TCC:
-                        assignReg(reg, tcc_usage, free_tcc)
+                    if instr.dst_reg is not None and i == instr.dst_reg:
+                        dst_reg.append(reg)
                     else:
-                        assert("RegType is incorrect {}".format(reg.rtype))
-                    continue
-                    if reg.rtype is Reg.RegType.Scalar:
-                        if reg.idx not in sreg_usage:
-                            new_idx = sreg_num + 1
-                            for idx in range(reg.idx, reg.end_idx):
-                                assert(idx not in sreg_usage)
-                                sreg_num += 1
-                                sreg_usage[idx] = sreg_num
-                            new_end_idx = sreg_num
-                            reg.idx = new_idx
-                            reg.end_idx = new_end_idx
-                        else:
-                            for idx in range(reg.idx, reg.end_idx):
-                                assert(idx in sreg_usage)
-                    elif reg.rtype is Reg.RegType.Vector:
-                        if reg.idx not in vreg_usage:
-                            new_idx = vreg_num + 1
-                            pdb.set_trace()
-                            for idx in range(reg.idx, reg.end_idx):
-                                assert(idx not in vreg_usage)
-                                vreg_num += 1
-                                vreg_usage[idx] = vreg_num
-                            new_end_idx = vreg_num
-                            reg.idx = new_idx
-                            reg.end_idx = new_end_idx
-                        else:
-                            for idx in range(reg.idx, reg.end_idx):
-                                assert(idx in vreg_usage)
-                    elif reg.rtype is Reg.RegType.Data:
-                        if reg.idx not in dreg_usage:
-                            new_idx = dreg_num + 1
-                            for idx in range(reg.idx, reg.end_idx):
-                                assert(idx not in dreg_usage)
-                                dreg_num += 1
-                                dreg_usage[idx] = dreg_num
-                            new_end_idx = dreg_num
-                            reg.idx = new_idx
-                            reg.end_idx = new_end_idx
-                        else:
-                            for idx in range(reg.idx, reg.end_idx):
-                                assert(idx in dreg_usage)
-                    elif reg.rtype is Reg.RegType.TCC:
-                        if reg.idx not in tcc_usage:
-                            new_idx = tcc_num + 1
-                            for idx in range(reg.idx, reg.end_idx):
-                                assert(idx not in tcc_usage)
-                                tcc_num += 1
-                                tcc_usage[idx] = tcc_num
-                            new_end_idx = tcc_num
-                            reg.idx = new_idx
-                            reg.end_idx = new_end_idx
-                        else:
-                            for idx in range(reg.idx, reg.end_idx):
-                                assert(idx in tcc_usage)
+                        assignReg(reg)
+                        pass
+                for reg in dst_reg:
+                    if instr.name.find("MAD") < 0:
+                        print("{}\n".format(instr))
+                        #pdb.set_trace()
+                        #killReg(reg)
                     else:
-                        assert("RegType is incorrect {}".format(reg.rtype))
+                        print("{}\n".format(instr))
+                        #pdb.set_trace()
+                        pass
+                    assignReg(reg)
 
             tcc_num = max_tcc # + 1    # add vcc
             tcc_num = int((tcc_num + 1) / 2) * 2
@@ -1040,6 +1059,12 @@ class RefPhase(CoasmListener):
             for instr in func.instrs:
                 instr.code_pos = code_pos + instr.getInstrSize()
                 code_pos = instr.code_pos
+
+            # update all smem variable
+            for n, var in kernel.variables.items():
+                if var.mem_space.kind == MemSpace.KindEnum.SHARED:
+                    var.addr = max_smem;
+                    max_smem += var.size
 
             # resolve after sreg num, code-size is knonw
             for instr in kernel.unresolved_instr:
@@ -1052,7 +1077,12 @@ class RefPhase(CoasmListener):
                         if stype is Symbol.TypeEnum.REG:
                             pass
                         elif stype is Symbol.TypeEnum.VAR:
-                            pass
+                            var = kernel.getVariable(operand)
+                            if var.mem_space.kind == MemSpace.KindEnum.SHARED:
+                                instr.operands[i] = var.addr
+                            else:
+                                pdb.set_trace()
+                                pass
                         elif stype is Symbol.TypeEnum.LABEL:
                             label = func.labels[operand]
                             #pdb.set_trace()
@@ -1064,7 +1094,7 @@ class RefPhase(CoasmListener):
             for instr in func.instrs:
                 for i, operand in enumerate(instr.operands):
                     operand_num = i + 1
-                    #instr.updateOperand(operand_num)
+                    instr.updateOperand(operand_num)
 
             input_sreg_num = kernel.resource["sreg_number"]
             sreg_num = int((sreg_num + 7 ) / 8)*8    # align to 8
@@ -1088,7 +1118,7 @@ class RefPhase(CoasmListener):
             max_vreg = vreg_num
 
             input_smem_size = kernel.resource["smem_size"]
-            smem_size = (self.memsize["shared"] + 127) / 128
+            smem_size = (kernel.smem_size + 127) / 128
             if input_smem_size == 0:
                 kernel.resource["smem_size"] = smem_size
             elif input_smem_size != smem_size:
@@ -1096,6 +1126,17 @@ class RefPhase(CoasmListener):
             max_dreg = int((dreg_num + 1) / 2) * 2
 
             info(ctx.start, "Exit Prog End")
+            asm_outfile = "{}.s".format(kernel_name)
+            if os.path.isfile(asm_outfile):
+                cnt = 0;
+                while (os.path.isfile(asm_outfile + str(cnt))):
+                    cnt += 1
+                asm_outfile += str(cnt)
+            with open("{}".format(asm_outfile), "w") as f:
+                func = self.functions[kernel_name]
+                for instr in func.instrs:
+                    f.write("{}\n".format(instr))
+        # finaly generate hex code
         for func_name, func in self.functions.items():
             func.code_pos = len(code)
             for instr in func.instrs:
@@ -1154,6 +1195,7 @@ if __name__ == '__main__':
     kernel_meta = kernel_meta_raw["opu.kernels"]
 
     kernels = {}
+    gmem_size = 0
     for k in kernel_meta:
         name = k['.name']
         kernel = Kernel(name)
@@ -1168,6 +1210,13 @@ if __name__ == '__main__':
             else:
                 arg.kind = ArgSymbol.Kind.SREG_VALUE
             kernel.addArg(arg)
+        if '.shared' in k:
+            for a in k['.shared']:
+                var_name = a['.name']
+                var = Var(var_name, DataType("{}*".format(var_name)), MemSpace("shared"))
+                var.size = a['.size']
+                kernel.addVariable(var)
+                kernel.smem_size += var.size
         kernel_ctrl = k['.kernel_ctrl']
         #for bit, ctrl in SpecialREG.kernelctrlbit.items():
         for builtin_reg in SpecialREG.builtin_reg:
@@ -1191,7 +1240,7 @@ if __name__ == '__main__':
 
     # definition phase, collect data
     print('*** Scan Definitions ***')
-    def_phase = DefPhase()
+    def_phase = DefPhase(kernels)
     walker.walk(def_phase, tree)
 
     # reference phase, check error
@@ -1201,9 +1250,9 @@ if __name__ == '__main__':
             def_phase.id_stype, \
             kernels,  \
             def_phase.functions, \
-            def_phase.variables, \
-            def_phase.memsize, \
             def_phase.unresolved_instr)
+            #def_phase.memsize, \
+            #def_phase.variables, \
     walker.walk(ref_phase, tree)
 
     # update kernel_ctrl from kernel.control
