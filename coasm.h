@@ -3,11 +3,11 @@
 enum class opu_op_t {
   NO_OP = -1
   ,
-ALU_OP = 0,
-SFP_OP = 1,
-TENSOR_OP = 2,
-DP_OP = 3,
-SP_OP = 4,
+IALU_OP = 0,
+IALU_LONG_OP = 1,
+FALU_OP = 2,
+SFP_OP = 3,
+TENSOR_OP = 4,
 INTP_OP = 5,
 ALU_SFU_OP = 6,
 TENSOR_LOAD_OP = 7,

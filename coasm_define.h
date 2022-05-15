@@ -56,7 +56,7 @@
 #define KERNEL_CTRL_BIT_THREAD_IDX_Z 18
 
 // # to generate from coasm.py ext_enc
-#define COMMON_ENC_ext_enc 0x7
+#define COMMON_ENC_ext1_enc 0x7
 #define COMMON_ENC_dsrc0_l 0x3
 #define COMMON_ENC_dsrc0_d 0x2
 #define COMMON_ENC_dsrc0_s 0x1

@@ -63,7 +63,8 @@ data_offset: '(' (DIGIT | HEX_NUMBER) ')';
 
 number: DIGIT | HEX_NUMBER | FP_NUMBER;
 
-generic_reg: register_ | ident;
+// generic_reg: register_ | ident;
+generic_reg: register_ ;
 
 
 register_: sreg | vreg | dreg | lreg;

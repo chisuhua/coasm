@@ -63,7 +63,8 @@ data_offset: '(' (DIGIT | HEX_NUMBER) ')';
 
 number: DIGIT | HEX_NUMBER | FP_NUMBER;
 
-generic_reg: register_ | ident;
+// generic_reg: register_ | ident;
+generic_reg: register_ ;
 
 
 register_: sreg | vreg | dreg | lreg;
@@ -143,7 +144,7 @@ lop_imm
 
 instrvalu:
 		VALU_VOP2 vreg ',' vreg ',' generic_reg_or_number (',' special_operand)*
-         | VALU_VOP1 vreg ',' (register_ | builtin_operand)
+         | VALU_VOP1 vreg ',' (generic_reg_or_number | builtin_operand)
          | VALU_VOPC sreg_or_tcc ',' vreg ',' generic_reg
          | VALU_VOP3A vreg ',' generic_reg ',' generic_reg ',' generic_reg
          | VALU_VOP3B vreg ',' generic_reg_or_number ',' vreg (',' special_operand)* ;
@@ -284,8 +285,7 @@ VALU_VOP2:
          | V '_' A D D '_' F '6' '4') E32?;
 
 VALU_VOP1:
-		(V '_' N O P
-         | V '_' M O V '_' B '3' '2'
+		(V '_' M O V '_' B '3' '2'
          | V '_' R E A D F I R S T L A N E '_' B '3' '2'
          | V '_' C V T '_' I '3' '2' '_' F '6' '4'
          | V '_' C V T '_' F '6' '4' '_' I '3' '2'
@@ -439,18 +439,19 @@ SALU_SOPC:
          | S '_' C M P '_' L E '_' U '3' '2') E32?;
 
 SALU_SOPP:
-		(S '_' C B R A N C H '_' T C C Z
-         | S '_' C B R A N C H '_' T C C N Z
+		(T '_' C B R A N C H '_' T C C Z
+         | T '_' C B R A N C H '_' T C C N Z
          | S '_' C B R A N C H '_' S C C Z
          | S '_' C B R A N C H '_' S C C N Z
-         | S '_' C B R A N C H '_' E X E C Z
-         | S '_' C B R A N C H '_' E X E C N Z
+         | T '_' C B R A N C H '_' E X E C Z
+         | T '_' C B R A N C H '_' E X E C N Z
          | S '_' B R A N C H
          | S '_' B A R R I E R
          | S '_' W A I T C N T
          | B A R '_' S Y N C
          | S '_' P H I
-         | S '_' E X I T) E32?;
+         | T '_' E X I T
+         | T '_' N O P) E32?;
 
 SMEM_SLS:
 		(S '_' L O A D '_' D W O R D

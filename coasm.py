@@ -492,7 +492,7 @@ class VisitType(Enum):
 
 CommonEnc = namedtuple('CommonEnc', ['width', 'value'])
 common_enc = {}
-common_enc["ext_enc"] = CommonEnc(4, 0x7)
+common_enc["ext1_enc"] = CommonEnc(4, 0x7)
 common_enc["dsrc0_l"] = CommonEnc(2, 0x3)
 common_enc["dsrc0_d"] = CommonEnc(2, 0x2)
 common_enc["dsrc0_s"] = CommonEnc(2, 0x1)
@@ -515,11 +515,11 @@ common_enc["max_tcc_32e"] = CommonEnc(2, 3)
 #    the EXT 32bit 's decoding is depend on next instruction enc
 # the Instr is created with enterInstruction in assembler.py , which pas op name as arg
 class OpType(Enum):
-    ALU_OP = 0
-    SFP_OP = 1
-    TENSOR_OP = 2
-    DP_OP = 3
-    SP_OP = 4
+    IALU_OP = 0
+    IALU_LONG_OP = 1
+    FALU_OP = 2
+    SFP_OP = 3
+    TENSOR_OP = 4
     INTP_OP = 5
     ALU_SFU_OP = 6
     TENSOR_LOAD_OP = 7
@@ -539,9 +539,9 @@ def decode_OpType(op):
     if (len(op) == 2):
         op_name = op[0]
         if op_name.find("_F32") > 0:
-            op = (*op, OpType.SP_OP, 0)
+            op = (*op, OpType.FALU_OP, 0)
         elif op_name.find("_F64") > 0:
-            op = (*op, OpType.DP_OP, 0)
+            op = (*op, OpType.FALU_OP, 0)
         elif op_name.find("_LOAD") > 0:
             op = (*op, OpType.LOAD_OP, 0)
         elif op_name.find("_STORE") > 0:
@@ -549,7 +549,7 @@ def decode_OpType(op):
         elif op_name.find("BRANCH") > 0:
             op = (*op, OpType.BRANCH_OP, 0)
         else:
-            op = (*op, OpType.ALU_OP, 0)
+            op = (*op, OpType.IALU_OP, 0)
     elif (len(op) == 3):
             op = (*op, 0)
     return op
@@ -829,7 +829,7 @@ class InstrValu(Instr):
         ext_bits = operand.idx >> common_enc["max_vdst_32e"].width
         if ext_bits > 0:
             self.ext1.vdst = ext_bits
-            self.ext_enc = common_enc["ext_enc"].value
+            self.ext_enc = common_enc["ext1_enc"].value
 
     def encode_src0(self, operand):
         if (isinstance(operand, int)):
@@ -838,7 +838,7 @@ class InstrValu(Instr):
             self.dsrc0_ = (operand >> 6) & 0x3
             ext_bits = operand >> (common_enc["max_src0_32e"].width + 2)
             if ext_bits > 0:
-                self.ext_enc = common_enc["ext_enc"].value
+                self.ext_enc = common_enc["ext1_enc"].value
                 self.ext1.imm = ext_bits
             return
         assert(isinstance(operand, Reg))
@@ -854,7 +854,7 @@ class InstrValu(Instr):
         self.src0 = operand.idx
         ext_bits = operand.idx >> common_enc["max_src0_32e"].width
         if ext_bits > 0:
-            self.ext_enc = common_enc["ext_enc"].value
+            self.ext_enc = common_enc["ext1_enc"].value
             self.ext1.src0 = ext_bits
 
     def encode_vsrc1(self, operand):
@@ -862,7 +862,7 @@ class InstrValu(Instr):
         self.vsrc1 = operand.idx
         ext_bits = operand.idx >> common_enc["max_vsrc1_32e"].width
         if ext_bits > 0:
-            self.ext_enc = common_enc["ext_enc"].value
+            self.ext_enc = common_enc["ext1_enc"].value
             self.ext1.vsrc1 = ext_bits
 
 
@@ -980,7 +980,11 @@ class InstrVALU_VOP2(InstrValu):
             self.op = self.OpcodeEnum.V_ADDCO_U32.value
 
     def getInstrSize(self):
-        if self.ext_enc != 0x0:
+        if self.ext_enc == common_enc["ext1_enc"].value:
+            self.ext = self.ext1.vdst << 26 | self.ext1.vsrc1 << 24 | self.ext1.src0 << 22 | self.ext1.imm
+            return 8
+        elif self.ext_enc != 0x0:
+            pdb.set_trace()
             return 8
         else:
             return 4
@@ -999,7 +1003,6 @@ class InstrVALU_VOP1(InstrValu):
                 ('ext_enc', c_uint, 4)]
 
     _optable_ = [
-                ('V_NOP', 0x0),
                 ('V_MOV_B32', 0x1),
                 ('V_READFIRSTLANE_B32', 0x2),
                 ('V_CVT_I32_F64', 0x3),
@@ -1040,20 +1043,29 @@ class InstrVALU_VOP1(InstrValu):
     class _fields_e1_(LittleEndianStructure):
         _pack_ = 1
         _fields_ = [
-                ("imm", c_uint, 22),
-                ("src0", c_uint, 2),
-                ("vsrc1", c_uint, 2),
+                ("imm", c_uint, 26),
                 ("vdst", c_uint, 2),
                 ('ext_enc', c_uint, 4)
                 ]
 
+    class _fields_e2_(LittleEndianStructure):
+        _pack_ = 1
+        _fields_ = [
+                ("unused", c_uint, 24),
+                ("src0", c_uint, 2),
+                ("vdst", c_uint, 2),
+                ('ext_enc', c_uint, 4)
+                ]
+
+
     def __init__(self, name=''):
         self.ext1 = self._fields_e1_()
+        self.ext2 = self._fields_e2_()
         super().__init__(name)
 
     def genGrammarInstrClass(self):
         #return self.getInstrDefName() + " vreg ',' generic_reg"
-        return self.getInstrDefName() + " vreg ',' (register_ | builtin_operand)"
+        return self.getInstrDefName() + " vreg ',' (generic_reg_or_number | builtin_operand)"
 
     def addOperand(self, operand):
         super().addOperand(operand)
@@ -1076,7 +1088,12 @@ class InstrVALU_VOP1(InstrValu):
         #self.addOperand(reg)
 
     def getInstrSize(self):
-        if self.ext_enc != 0x0:
+        if self.ext_enc == common_enc["ext1_enc"].value:
+            #pdb.set_trace()
+            self.ext = self.ext1.vdst << 26 | self.ext1.imm
+            return 8
+        elif self.ext_enc != 0x0:
+            pdb.set_trace()
             return 8
         else:
             return 4
@@ -1155,7 +1172,7 @@ class InstrVALU_VOPC(InstrValu):
             if operand.idx <= common_enc["max_tcc_32e"].value:
                 self.tcc = operand.idx
             else:
-                self.ext_enc = common_enc["ext_enc"].value
+                self.ext_enc = common_enc["ext1_enc"].value
                 self.ext = operand >> 6
                 pdb.set_trace()
         elif operand_num == 2:
@@ -1556,20 +1573,21 @@ class InstrSALU_SOPP(InstrSalu):
                 ('ext_enc', c_uint, 4)]
 
     _optable_ = [
-                ('S_CBRANCH_TCCZ', 0x0, OpType.BRANCH_OP, None),
-                ('S_CBRANCH_TCCNZ', 0x1, OpType.BRANCH_OP, None),
+                ('T_CBRANCH_TCCZ', 0x0, OpType.BRANCH_OP, None),
+                ('T_CBRANCH_TCCNZ', 0x1, OpType.BRANCH_OP, None),
                 #('S_CBRANCH_SCC0', 0x3),
                 #('S_CBRANCH_SCC1', 0x4),
                 ('S_CBRANCH_SCCZ', 0x2, OpType.BRANCH_OP, None),
                 ('S_CBRANCH_SCCNZ', 0x3, OpType.BRANCH_OP, None),
-                ('S_CBRANCH_EXECZ', 0x4, OpType.BRANCH_OP, None),
-                ('S_CBRANCH_EXECNZ', 0x5, OpType.BRANCH_OP, None),
+                ('T_CBRANCH_EXECZ', 0x4, OpType.BRANCH_OP, None),
+                ('T_CBRANCH_EXECNZ', 0x5, OpType.BRANCH_OP, None),
                 ('S_BRANCH', 0x8, OpType.BRANCH_OP, None),
                 ('S_BARRIER', 0x9, OpType.BARRIER_OP, None),
                 ('S_WAITCNT', 0xa, OpType.WAITCNT_OP, None),
                 ('BAR_SYNC', 0xd, OpType.BARRIER_OP, None),
                 ('S_PHI', 0xb, OpType.BRANCH_OP, None),
-                ('S_EXIT', 0xc, OpType.EXIT_OP, None)
+                ('T_EXIT', 0xc, OpType.EXIT_OP, None),
+                ('T_NOP', 0xe)
                 ]
 
     def __init__(self, name=''):
@@ -1585,7 +1603,7 @@ class InstrSALU_SOPP(InstrSalu):
         return self.op <= self.optable['S_BRANCH'].value
 
     def isCBranchOp(self):
-        return self.op <= self.optable['S_CBRANCH_EXECNZ'].value
+        return self.op <= self.optable['T_CBRANCH_EXECNZ'].value
 
     def isBarOp(self):
         return self.op == self.optable['BAR_SYNC'].value
@@ -1748,16 +1766,16 @@ class InstrVMEM_VLS(InstrVmem):
 
     class _fields_e1_(LittleEndianStructure):
         _pack_ = 1
-        _fields_ = [
-                ("imm", c_uint, 24),
-                ("vaddr", c_uint, 2),
-                ("vdata", c_uint, 2),
+        _fields_ = [("imm", c_uint, 28),
                 ('ext_enc', c_uint, 4)
                 ]
 
     class _fields_e2_(LittleEndianStructure):
         _pack_ = 1
-        _fields_ = [("imm", c_uint, 28),
+        _fields_ = [
+                ("imm", c_uint, 24),
+                ("vaddr", c_uint, 2),
+                ("vdata", c_uint, 2),
                 ('ext_enc', c_uint, 4)
                 ]
 
@@ -1783,8 +1801,11 @@ class InstrVMEM_VLS(InstrVmem):
             ]
 
     def getInstrSize(self):
-        if self.ext_enc != 0x0:
+        if self.ext_enc == common_enc["ext1_enc"].value:
+            self.ext = self.ext1.imm
             return 8
+        elif self.ext_enc != 0x0:
+            pdb.set_trace()
         else:
             return 4
 

@@ -43,12 +43,16 @@ struct BytesVOP1 {
 	} e0_;
 
 	struct BytesVOP1_e1_ {
-	    uint32_t imm : 22;
-	    uint32_t src0 : 2;
-	    uint32_t vsrc1 : 2;
+	    uint32_t imm : 26;
 	    uint32_t vdst : 2;
 	    uint32_t ext_enc : 4;
 	} e1_;
+	struct BytesVOP1_e2_ {
+	    uint32_t unused : 24;
+	    uint32_t src0 : 2;
+	    uint32_t vdst : 2;
+	    uint32_t ext_enc : 4;
+	} e2_;
 	} ext;
 
 };
@@ -235,13 +239,13 @@ struct BytesVLS {
 	} e0_;
 
 	struct BytesVLS_e1_ {
-	    uint32_t imm : 24;
-	    uint32_t vaddr : 2;
-	    uint32_t vdata : 2;
+	    uint32_t imm : 28;
 	    uint32_t ext_enc : 4;
 	} e1_;
 	struct BytesVLS_e2_ {
-	    uint32_t imm : 28;
+	    uint32_t imm : 24;
+	    uint32_t vaddr : 2;
+	    uint32_t vdata : 2;
 	    uint32_t ext_enc : 4;
 	} e2_;
 	} ext;
