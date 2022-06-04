@@ -61,13 +61,13 @@ data_expr_list: number (',' number)*;
 
 data_offset: '(' (DIGIT | HEX_NUMBER) ')';
 
-number: DIGIT | HEX_NUMBER | FP_NUMBER;
+number: ( HEX_NUMBER | FP_NUMBER | DIGIT);
 
 // generic_reg: register_ | ident;
 generic_reg: register_ ;
 
 
-register_: sreg | vreg | dreg | lreg;
+register_: sreg_or_tcc | vreg | dreg | lreg;
 
 sreg: ('-' | '!')? (SREG | SREG_INDEX);
 
@@ -92,6 +92,10 @@ const_: CONST;
 param_: PARAM;
 global_: GLOBAL_;
 shared_: SHARED_;
+
+float_mode : ROUND_MODE | SAT_MODE;
+ROUND_MODE: RM ':' ( RN | RZ);
+SAT_MODE: SAT ':' ( SAT01 );
 
 special_operand : ident ':' sreg_or_tcc;
 sreg_or_tcc: sreg | tcc;
@@ -220,6 +224,12 @@ PARAM: P A R A M;
 GLOBAL_: G L O B A L;
 
 SHARED_: S H A R E D;
+
+RM: R M;
+RN: R N;
+RZ: R Z;
+SAT: S A T;
+SAT01: S A T '0' '1';
 
 MSPACE: 'mspace';
 

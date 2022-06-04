@@ -61,13 +61,13 @@ data_expr_list: number (',' number)*;
 
 data_offset: '(' (DIGIT | HEX_NUMBER) ')';
 
-number: DIGIT | HEX_NUMBER | FP_NUMBER;
+number: ( HEX_NUMBER | FP_NUMBER | DIGIT);
 
 // generic_reg: register_ | ident;
 generic_reg: register_ ;
 
 
-register_: sreg | vreg | dreg | lreg;
+register_: sreg_or_tcc | vreg | dreg | lreg;
 
 sreg: ('-' | '!')? (SREG | SREG_INDEX);
 
@@ -92,6 +92,10 @@ const_: CONST;
 param_: PARAM;
 global_: GLOBAL_;
 shared_: SHARED_;
+
+float_mode : ROUND_MODE | SAT_MODE;
+ROUND_MODE: RM ':' ( RN | RZ);
+SAT_MODE: SAT ':' ( SAT01 );
 
 special_operand : ident ':' sreg_or_tcc;
 sreg_or_tcc: sreg | tcc;
@@ -143,10 +147,10 @@ lop_imm
 
 
 instrvalu:
-		VALU_VOP2 vreg ',' vreg ',' generic_reg_or_number (',' special_operand)*
+		VALU_VOP2 vreg ',' vreg ',' generic_reg_or_number (',' special_operand)* ('%' float_mode (',' float_mode)*)? 
          | VALU_VOP1 vreg ',' (generic_reg_or_number | builtin_operand)
-         | VALU_VOPC sreg_or_tcc ',' vreg ',' generic_reg
-         | VALU_VOP3A vreg ',' generic_reg ',' generic_reg ',' generic_reg
+         | VALU_VOPC sreg_or_tcc ',' vreg ',' generic_reg_or_number
+         | VALU_VOP3A vreg ',' generic_reg ',' generic_reg ',' generic_reg ('%' float_mode (',' float_mode)*)? 
          | VALU_VOP3B vreg ',' generic_reg_or_number ',' vreg (',' special_operand)* ;
 
 instrsalu:
@@ -154,14 +158,14 @@ instrsalu:
          | SALU_SOP2 sreg ',' sreg ',' sreg
          | SALU_SOPK sreg ',' number
          | SALU_SOPC sreg ',' sreg
-         | SALU_SOPP ( (sreg_or_tcc ',')? branch_target | number | wait_expr (',' wait_expr)*)?;
+         | SALU_SOPP (sreg_or_tcc ',')? (branch_target | number | wait_expr (',' wait_expr)*)?;
 
 instrsmem:
 		SMEM_SLS (sreg | ident) ',' sreg ',' (sreg | number) ('%' mspace_all)? ;
 
 instrvmem:
 		VMEM_VMUBUF vreg ',' vreg ',' sreg ',' sreg
-         | VMEM_VLS vreg ',' (vreg | dreg | vmem_special_operand) ',' (vreg | dreg | number) ('%' mspace_all)?;
+         | VMEM_VLS vreg ',' (vreg | dreg | vmem_special_operand) (',' number)? ('%' mspace_all)?;
 
 instrdmem:
 		DMEM_DLS (vreg | ident | mem_expr_list) ',' mem_expr_list;
@@ -242,6 +246,12 @@ GLOBAL_: G L O B A L;
 
 SHARED_: S H A R E D;
 
+RM: R M;
+RN: R N;
+RZ: R Z;
+SAT: S A T;
+SAT01: S A T '0' '1';
+
 MSPACE: 'mspace';
 
 comment: COMMENT;
@@ -255,7 +265,11 @@ VALU_VOP2:
          | V '_' S U B R E V '_' F '3' '2'
          | V '_' M U L '_' F '3' '2'
          | V '_' M U L '_' I '3' '2' '_' I '2' '4'
-         | V '_' M U L L O '_' I '3' '2' '_' I '3' '2'
+         | V '_' M U L L O '_' I '3' '2' '_' I '2' '4'
+         | V '_' M U L L O '_' I '3' '2'
+         | V '_' M U L H I '_' I '3' '2'
+         | V '_' M U L L O '_' U '3' '2'
+         | V '_' M U L H I '_' U '3' '2'
          | V '_' M U L '_' I '6' '4' '_' I '3' '2'
          | V '_' M I N '_' F '3' '2'
          | V '_' M A X '_' F '3' '2'
@@ -356,12 +370,11 @@ VALU_VOP3A:
          | V '_' F M A '_' F '3' '2'
          | V '_' F M A '_' F '6' '4'
          | V '_' A L I G N B I T '_' B '3' '2'
+         | V '_' C S E L '_' B '3' '2'
+         | V '_' C S E L '_' B '6' '4'
          | V '_' M A X '3' '_' I '3' '2'
          | V '_' M I N '_' F '6' '4'
          | V '_' M A X '_' F '6' '4'
-         | V '_' M U L '_' L O '_' U '3' '2'
-         | V '_' M U L '_' H I '_' U '3' '2'
-         | V '_' M U L '_' L O '_' I '3' '2'
          | V '_' F R A C T '_' F '3' '2' '_' V O P '3' A
          | V '_' C M P '_' L T '_' F '3' '2' '_' V O P '3' A
          | V '_' C M P '_' E Q '_' F '3' '2' '_' V O P '3' A

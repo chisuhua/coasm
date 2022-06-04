@@ -8,9 +8,9 @@ import pdb
 MAX_SREG_NUM = 255
 MAX_RESERVED_SREG_NUM = 4
 MAX_USER_SREG_NUM = 220
-MAX_VREG_NUM = 255
+MAX_VREG_NUM = 512
 MAX_DREG_NUM = 255
-MAX_TCC_NUM = 16
+MAX_TCC_NUM = 32
 SREG_TCC = 106
 
 def utilReplace(str):
@@ -500,7 +500,13 @@ common_enc["dsrc0_v"] = CommonEnc(2, 0x0)
 common_enc["max_src0_32e"] = CommonEnc(6, 64)
 common_enc["max_vsrc1_32e"] = CommonEnc(6, 64)
 common_enc["max_vdst_32e"] = CommonEnc(6, 64)
+common_enc["max_vdata_32e"] = CommonEnc(6, 64)
+common_enc["max_vaddr_32e"] = CommonEnc(6, 64)
+common_enc["max_vls_offset_32e"] = CommonEnc(7, 128)
 common_enc["max_tcc_32e"] = CommonEnc(2, 3)
+common_enc["max_simm12"] = CommonEnc(12, (1 << 12) -1)
+common_enc["min_simm12"] = CommonEnc(12, 1 - ((1 << 13) -1))
+common_enc["max_barcount"] = CommonEnc(4, 8)
 #common_enc["bar_op"] = CommonEnc(2, 3)
 
 
@@ -702,8 +708,17 @@ class Instr(LittleEndianStructure):
             instr_encode += "\n\t} ext;\n"
         instr_encode += "\n};"
         instr_encode += "\nvoid print" + self.getFmtName() + "(Bytes" + self.getFmtName() + " bytes) {\n" + \
-                "printf(\"" + ",".join(["{} %x ".format(n[0], n[-1]) for n in self._fields_ if n[0][0:3] != 'ext']) + "\\n\", " + \
-                ",".join(["bytes.{}".format(n[0], n[-1]) for n in self._fields_ if n[0][0:3] != 'ext']) + ");\n};\n"
+                "printf(\"decoding: " + ",".join(["{} %x ".format(n[0]) for n in self._fields_ if n[0][0:3] != 'ext']) + "\\n\", " + \
+                ",".join(["bytes.{}".format(n[0]) for n in self._fields_ if n[0][0:3] != 'ext']) + ");\n"
+        if len(ext_) > 0:
+            ext = 1
+            for ext_fields in dir(self):
+                if ext_fields.find('_fields_e') >= 0:
+                    exec("self.tmp_ext_field = self.{}._fields_".format(ext_fields))
+                    instr_encode += "printf(\"ext_field{}: ".format(ext) + ",".join(["{} %x ".format(n[0]) for n in self.tmp_ext_field]) + "\\n\", " + \
+                    ",".join(["bytes.ext.e{}_.{}".format(ext, n[0]) for n in self.tmp_ext_field]) + ");\n"
+                    ext += 1
+        instr_encode += "\n};"
         return instr_encode
 
     def getFlag(self, name):
@@ -823,23 +838,29 @@ class InstrValu(Instr):
     def __init__(self, name=''):
         super().__init__(name)
 
-    def encode_vdst(self, operand):
+    def encode_vdst(self, operand, ext_field_reg):
         assert(isinstance(operand, Reg))
-        self.vdst = operand.idx
+        self.vdst = operand.idx & ((1 << (common_enc["max_vdst_32e"].width + 1)) - 1)
         ext_bits = operand.idx >> common_enc["max_vdst_32e"].width
         if ext_bits > 0:
-            self.ext1.vdst = ext_bits
+            #if self.vdst == 63:
+            #    pdb.set_trace()
+            ext_field_reg.vdst = ext_bits
             self.ext_enc = common_enc["ext1_enc"].value
+        else:
+            ext_field_reg.vdst = 0
 
-    def encode_src0(self, operand):
+    def encode_src0(self, operand, ext_field_reg):
         if (isinstance(operand, int)):
             self.imm_ = 1
-            self.src0 = operand & 0x3f
+            self.src0 = operand & ((1 << (common_enc["max_src0_32e"].width + 1)) - 1)
             self.dsrc0_ = (operand >> 6) & 0x3
             ext_bits = operand >> (common_enc["max_src0_32e"].width + 2)
             if ext_bits > 0:
                 self.ext_enc = common_enc["ext1_enc"].value
                 self.ext1.imm = ext_bits
+            else:
+                self.ext1.imm = 0
             return
         assert(isinstance(operand, Reg))
         if (operand.rtype == Reg.RegType.Data):
@@ -855,15 +876,19 @@ class InstrValu(Instr):
         ext_bits = operand.idx >> common_enc["max_src0_32e"].width
         if ext_bits > 0:
             self.ext_enc = common_enc["ext1_enc"].value
-            self.ext1.src0 = ext_bits
+            ext_field_reg.src0 = ext_bits
+        else:
+            ext_field_reg.src0 = 0
 
-    def encode_vsrc1(self, operand):
+    def encode_vsrc1(self, operand, ext_field_reg):
         assert(isinstance(operand, Reg))
         self.vsrc1 = operand.idx
         ext_bits = operand.idx >> common_enc["max_vsrc1_32e"].width
         if ext_bits > 0:
             self.ext_enc = common_enc["ext1_enc"].value
-            self.ext1.vsrc1 = ext_bits
+            ext_field_reg.vsrc1 = ext_bits
+        else:
+            ext_field_reg.vsrc1 = 0
 
 
 class InstrSalu(Instr):
@@ -877,6 +902,43 @@ class InstrSmem(Instr):
 class InstrVmem(Instr):
     def __init__(self, name=''):
         super().__init__(name)
+
+    def encode_vdata(self, operand, ext_field_reg):
+        assert(isinstance(operand, Reg))
+        self.vdata = operand.idx & ((1 << (common_enc["max_vdata_32e"].width + 1)) - 1)
+        ext_bits = operand.idx >> common_enc["max_vdata_32e"].width
+        if ext_bits > 0:
+            ext_field_reg.vdata = ext_bits
+            self.ext_enc = common_enc["ext1_enc"].value
+        else:
+            ext_field_reg.vdata = 0
+
+    def encode_vaddr(self, operand, ext_field_reg):
+        assert(isinstance(operand, Reg))
+        if (operand.rtype == Reg.RegType.Scalar):
+            self.ssrc0_ = 1
+        else:
+            self.ssrc0_ = 0
+        self.vaddr = operand.idx & ((1 << (common_enc["max_vaddr_32e"].width + 1)) - 1)
+        ext_bits = operand.idx >> common_enc["max_vaddr_32e"].width
+        if ext_bits > 0:
+            self.ext_enc = common_enc["ext1_enc"].value
+            ext_field_reg.vaddr = ext_bits
+        else:
+            ext_field_reg.vaddr = 0
+
+    def encode_vls_offset(self, operand, ext_field_reg):
+        assert (isinstance(operand, int))
+        self.offset = operand & ((1 << (common_enc["max_vls_offset_32e"].width + 1)) - 1)
+        ext_bits = operand >> common_enc["max_vls_offset_32e"].width
+        if ext_bits > 0:
+            self.ext_enc = common_enc["ext1_enc"].value
+            ext_field_reg.imm = ext_bits
+        else:
+            ext_field_reg.imm = 0
+
+
+
 
 class InstrDmem(Instr):
     def __init__(self, name=''):
@@ -914,11 +976,15 @@ class InstrVALU_VOP2(InstrValu):
     _optable_ = [
                 ('V_CNDMASK_B32',  0x0),
                 ('V_ADD_F32',  0x1),
-                ('V_SUB_F32',  0x3),
-                ('V_SUBREV_F32', 0x4),
-                ('V_MUL_F32',   0x5),
-                ('V_MUL_I32_I24', 0x6),
-                ('V_MULLO_I32_I32', 0x7),
+                ('V_SUB_F32',  0x2),
+                ('V_SUBREV_F32', 0x3),
+                ('V_MUL_F32',   0x4),
+                ('V_MUL_I32_I24', 0x5),
+                ('V_MULLO_I32_I24', 0xe),
+                ('V_MULLO_I32', 0x6),
+                ('V_MULHI_I32', 0x7),
+                ('V_MULLO_U32', 0x8),
+                ('V_MULHI_U32', 0x9),
                 ('V_MUL_I64_I32', 0x2d),
                 ('V_MIN_F32', 0xa),
                 ('V_MAX_F32', 0xb),
@@ -951,7 +1017,7 @@ class InstrVALU_VOP2(InstrValu):
 
     def genGrammarInstrClass(self):
         #return self.getInstrDefName() + " vreg ',' generic_reg_or_number ',' vreg (',' special_operand)*"
-        return self.getInstrDefName() + " vreg ',' vreg ',' generic_reg_or_number (',' special_operand)*"
+        return self.getInstrDefName() + " vreg ',' vreg ',' generic_reg_or_number (',' special_operand)* ('%' float_mode (',' float_mode)*)? "
 
     def addOperand(self, operand):
         super().addOperand(operand)
@@ -963,11 +1029,11 @@ class InstrVALU_VOP2(InstrValu):
     def updateOperand(self, operand_num):
         operand = self.operands[operand_num-1]
         if operand_num == 1:
-            self.encode_vdst(operand)
+            self.encode_vdst(operand, self.ext1)
         elif operand_num == 2:
-            self.encode_vsrc1(operand)
+            self.encode_vsrc1(operand, self.ext1)
         elif operand_num == 3:
-            self.encode_src0(operand)
+            self.encode_src0(operand, self.ext1)
 
 
 
@@ -1078,9 +1144,9 @@ class InstrVALU_VOP1(InstrValu):
     def updateOperand(self, operand_num):
         operand = self.operands[operand_num - 1]
         if operand_num == 1:
-            self.encode_vdst(operand)
+            self.encode_vdst(operand, self.ext2)
         elif operand_num == 2:
-            self.encode_src0(operand)
+            self.encode_src0(operand, self.ext2)
 
     def addBuiltinOperand(self, reg_str):
         super().addSpecialOperand(UnresolvedReg.Kind.builtin, reg_str)
@@ -1091,6 +1157,8 @@ class InstrVALU_VOP1(InstrValu):
         if self.ext_enc == common_enc["ext1_enc"].value:
             #pdb.set_trace()
             self.ext = self.ext1.vdst << 26 | self.ext1.imm
+            self.ext |= self.ext2.vdst << 26;
+            self.ext |= self.ext2.src0 << 24;
             return 8
         elif self.ext_enc != 0x0:
             pdb.set_trace()
@@ -1118,7 +1186,7 @@ class InstrVALU_VOPC(InstrValu):
                 ("imm", c_uint, 22),
                 ("src0", c_uint, 2),
                 ("vsrc1", c_uint, 2),
-                ("vdst", c_uint, 2),
+                ("tcc", c_uint, 2),
                 ('ext_enc', c_uint, 4)
                 ]
 
@@ -1156,7 +1224,7 @@ class InstrVALU_VOPC(InstrValu):
                 ]
 
     def genGrammarInstrClass(self):
-        return self.getInstrDefName() + " sreg_or_tcc ',' vreg ',' generic_reg"
+        return self.getInstrDefName() + " sreg_or_tcc ',' vreg ',' generic_reg_or_number"
 
     def addOperand(self, operand):
         super().addOperand(operand)
@@ -1169,16 +1237,17 @@ class InstrVALU_VOPC(InstrValu):
         operand = self.operands[operand_num - 1]
         if operand_num == 1:
             assert(isinstance(operand, Reg))
-            if operand.idx <= common_enc["max_tcc_32e"].value:
-                self.tcc = operand.idx
-            else:
+            self.tcc = operand.idx & ((1 << (common_enc["max_tcc_32e"].width + 1)) - 1)
+            ext_bits = operand.idx >> common_enc["max_tcc_32e"].width
+            if ext_bits > 0:
                 self.ext_enc = common_enc["ext1_enc"].value
-                self.ext = operand >> 6
-                pdb.set_trace()
+                self.ext1.tcc = ext_bits
+            else:
+                self.ext1.tcc = 0
         elif operand_num == 2:
-            self.encode_src0(operand)
+            self.encode_vsrc1(operand, self.ext1)
         elif operand_num == 3:
-            self.encode_vsrc1(operand)
+            self.encode_src0(operand, self.ext1)
 
 
     #def addSpecialCCReg(self, reg_str):
@@ -1193,8 +1262,11 @@ class InstrVALU_VOPC(InstrValu):
     #    #    self.op = self.OpcodeEnum.V_ADDCO_U32.value
 
     def getInstrSize(self):
-        if self.src0 == 0xFF:
-            return self.instr_size
+        if self.ext_enc == common_enc["ext1_enc"].value:
+            self.ext = self.ext1.tcc << 26 | self.ext1.vsrc1 << 24 | self.ext1.src0 << 22 | self.ext1.imm
+            return 8
+        elif self.ext_enc != 0x0:
+            pdb.set_trace()
         else:
             return 4
 
@@ -1227,14 +1299,13 @@ class InstrVALU_VOP3A(InstrValu):
                 ('V_FMA_F32', 0xc),
                 ('V_FMA_F64', 0xd),
                 ('V_ALIGNBIT_B32', 0xe),
-                ('V_MAX3_I32', 0xf),
+                ('V_CSEL_B32', 0xf),
+                ('V_CSEL_B64', 0x10),
+                ('V_MAX3_I32', 0x12),
                 #('#V_DIV_FIXUP_F64', 0x10),
                 #('#V_DIV_FMAS_F64', 0x10),
                 ('V_MIN_F64', 0x13),
                 ('V_MAX_F64', 0x14),
-                ('V_MUL_LO_U32', 0x15),
-                ('V_MUL_HI_U32', 0x16),
-                ('V_MUL_LO_I32', 0x17),
                 ('V_FRACT_F32_VOP3A', 0x18),
                 ('V_CMP_LT_F32_VOP3A', 0x19),
                 ('V_CMP_EQ_F32_VOP3A', 0x1a),
@@ -1268,7 +1339,7 @@ class InstrVALU_VOP3A(InstrValu):
         super().__init__(name)
 
     def genGrammarInstrClass(self):
-        return self.getInstrDefName() + " vreg ',' generic_reg ',' generic_reg ',' generic_reg"
+        return self.getInstrDefName() + " vreg ',' generic_reg ',' generic_reg ',' generic_reg ('%' float_mode (',' float_mode)*)? "
 
     def addOperand(self, operand):
         super().addOperand(operand)
@@ -1624,16 +1695,30 @@ class InstrSALU_SOPP(InstrSalu):
             elif self.isBranchOp():
                 assert(isinstance(operand, int))
                 self.simm12 = operand
+                if self.simm12 > common_enc["max_simm12"].value or self.simm12 < common_enc["min_simm12"].value:
+                    # branch out of range
+                    pdb.set_trace()
             else:
                 # TODO extend tcc for s_branch target
                 pdb.set_trace()
         elif operand_num == 2:
+            if not isinstance(operand, int):
+                pdb.set_trace()
             assert(isinstance(operand, int))
             # setup  bar_count
-            self.simm12 = operand
+            if self.isBranchOp():
+                self.simm12 = operand
+                if self.simm12 > common_enc["max_simm12"].value or self.simm12 < common_enc["min_simm12"].value:
+                    pdb.set_trace()
+            elif self.isBarOp():
+                if self.simm12 > common_enc["max_barcount"].value:
+                    # branch out of range
+                    pdb.set_trace()
+                self.simm12 = operand
 
     def genGrammarInstrClass(self):
-        return self.getInstrDefName() + " ( (sreg_or_tcc ',')? branch_target | number | wait_expr (',' wait_expr)*)?"
+        #return self.getInstrDefName() + " ( (sreg_or_tcc ',')? branch_target | number | wait_expr (',' wait_expr)*)?"
+        return self.getInstrDefName() + " (sreg_or_tcc ',')? (branch_target | number | wait_expr (',' wait_expr)*)?"
 
 class InstrSMEM_SLS(InstrSmem):
     _fields_ = [("offset", c_uint, 8),
@@ -1802,7 +1887,9 @@ class InstrVMEM_VLS(InstrVmem):
 
     def getInstrSize(self):
         if self.ext_enc == common_enc["ext1_enc"].value:
-            self.ext = self.ext1.imm
+            self.ext = self.ext2.imm
+            self.ext |= self.ext2.vaddr << 24
+            self.ext |= self.ext2.vdata << 26
             return 8
         elif self.ext_enc != 0x0:
             pdb.set_trace()
@@ -1810,7 +1897,7 @@ class InstrVMEM_VLS(InstrVmem):
             return 4
 
     def genGrammarInstrClass(self):
-        return self.getInstrDefName() + " vreg ',' (vreg | dreg | vmem_special_operand) ',' (vreg | dreg | number) ('%' mspace_all)?"
+        return self.getInstrDefName() + " vreg ',' (vreg | dreg | vmem_special_operand) (',' number)? ('%' mspace_all)?"
 
     def isStoreOp(self):
         return self.op >= self.optable['V_STORE_DWORD'].value
@@ -1819,18 +1906,12 @@ class InstrVMEM_VLS(InstrVmem):
         operand = self.operands[operand_num - 1]
         if operand_num == 1:
             assert(isinstance(operand, Reg))
-            #if self.isStoreOp():
-            #    self.vaddr = operand.idx
-            #else:
-            self.vdata = operand.idx
+            self.encode_vdata(operand, self.ext2)
         elif operand_num == 2:
             assert(isinstance(operand, Reg))
             if operand.rtype == Reg.RegType.Scalar:
                 self.ssrc0_ = 1
-            #if self.isStoreOp():
-            #    self.vdata = operand.idx
-            #else:
-            self.vaddr = operand.idx
+            self.encode_vaddr(operand, self.ext2)
         elif operand_num == 3:
             #if (isinstance(operand, Reg)):
             #    self.offset = operand.idx
@@ -1839,7 +1920,8 @@ class InstrVMEM_VLS(InstrVmem):
             #    self.offset = operand
             #    self.imm = 1
             assert (isinstance(operand, int))
-            self.offset = operand
+            self.encode_vls_offset(operand, self.ext2)
+            #self.offset = operand
 
 
     def addOperand(self, operand):

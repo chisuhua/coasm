@@ -350,6 +350,15 @@ class CoasmListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by CoasmParser#float_mode.
+    def enterFloat_mode(self, ctx:CoasmParser.Float_modeContext):
+        pass
+
+    # Exit a parse tree produced by CoasmParser#float_mode.
+    def exitFloat_mode(self, ctx:CoasmParser.Float_modeContext):
+        pass
+
+
     # Enter a parse tree produced by CoasmParser#special_operand.
     def enterSpecial_operand(self, ctx:CoasmParser.Special_operandContext):
         pass

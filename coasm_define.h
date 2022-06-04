@@ -62,11 +62,28 @@
 #define COMMON_ENC_dsrc0_s 0x1
 #define COMMON_ENC_dsrc0_v 0x0
 #define COMMON_ENC_max_src0_32e_width 6
-#define COMMON_ENC_max_src0_32e 127
+#define COMMON_ENC_max_src0_32e 63
 #define COMMON_ENC_max_vsrc1_32e_width 6
-#define COMMON_ENC_max_vsrc1_32e 127
+#define COMMON_ENC_max_vsrc1_32e 63
 #define COMMON_ENC_max_vdst_32e_width 6
-#define COMMON_ENC_max_vdst_32e 127
+#define COMMON_ENC_max_vdst_32e 63
+
+#define COMMON_ENC_max_vdata_32e_width 6
+#define COMMON_ENC_max_vdata_32e 63
+
+#define COMMON_ENC_max_vaddr_32e_width 6
+#define COMMON_ENC_max_vaddr_32e 63
+
+#define COMMON_ENC_max_vls_offset_32e_width 7
+#define COMMON_ENC_max_vls_offset_32e 127
+
+#define COMMON_ENC_max_tcc_32e_width 2
+#define COMMON_ENC_max_tcc_32e 3
+
+
+#define COMMON_ENC_max_simm12_width 12
+#define COMMON_ENC_max_simm12 ((1 < 12) -1)
+
 
 // address space conversion
 const unsigned long long _GLOBAL_HEAP_START = 0xC0000000;

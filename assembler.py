@@ -19,6 +19,8 @@ import binascii
 from grammar.CoasmLexer import CoasmLexer
 from grammar.CoasmParser import CoasmParser
 from grammar.CoasmListener import CoasmListener
+from elf import elf
+from elf.SparseMemoryImage import SparseMemoryImage
 
 import struct
 code = []
@@ -323,6 +325,10 @@ class DefPhase(CoasmListener):
         else:
             pass
         self.cur_function.addLabel(label)
+
+    def enterFloat_mode(self, ctx):
+        #TODO
+        pass
 
     def enterIdent(self, ctx):
         ident = ctx.getText()
@@ -991,6 +997,8 @@ class RefPhase(CoasmListener):
                     size = reg.end_idx - reg.idx + 1
                     new_idx = findFree(free, size)
                     old_idx = reg.idx
+                    if new_idx == -1:
+                        pdb.set_trace()
                     assert(new_idx != -1)
                     reg.idx = new_idx
                     #print("assign old reg.idx {} to new {}".format(old_idx, new_idx))
@@ -1057,8 +1065,8 @@ class RefPhase(CoasmListener):
             # update each instr's code_pos after instr size is known
             code_pos = func.code_pos
             for instr in func.instrs:
-                instr.code_pos = code_pos + instr.getInstrSize()
-                code_pos = instr.code_pos
+                instr.code_pos = code_pos
+                code_pos = instr.code_pos + instr.getInstrSize()
 
             # update all smem variable
             for n, var in kernel.variables.items():
@@ -1067,6 +1075,7 @@ class RefPhase(CoasmListener):
                     max_smem += var.size
 
             # resolve after sreg num, code-size is knonw
+            branch_instr = []
             for instr in kernel.unresolved_instr:
                 for i, operand in enumerate(instr.operands):
                     if isinstance(operand, UnresolvedReg):
@@ -1085,12 +1094,32 @@ class RefPhase(CoasmListener):
                                 pass
                         elif stype is Symbol.TypeEnum.LABEL:
                             label = func.labels[operand]
-                            #pdb.set_trace()
                             if instr.getFmtName() == "SOPP" and instr.isBranchOp():
+                                #pdb.set_trace()
                                 pcrel = label.instr.code_pos - instr.code_pos
                                 instr.operands[i] = pcrel
+                                branch_instr.append([instr, i, label.instr])
                             pass
 
+            for instr in func.instrs:
+                for i, operand in enumerate(instr.operands):
+                    operand_num = i + 1
+                    instr.updateOperand(operand_num)
+
+            # re-update each instr's code_pos after branch opcode size is known(which might change code_pos)
+            code_pos = func.code_pos
+            for instr in func.instrs:
+                instr.code_pos = code_pos
+                code_pos = instr.code_pos + instr.getInstrSize()
+
+            for branch_list in branch_instr:
+                instr = branch_list[0]
+                i = branch_list[1]
+                target_instr = branch_list[2]
+                #pdb.set_trace()
+                instr.operands[i] = target_instr.code_pos - instr.code_pos
+
+            # update the branch operand 
             for instr in func.instrs:
                 for i, operand in enumerate(instr.operands):
                     operand_num = i + 1
@@ -1137,13 +1166,26 @@ class RefPhase(CoasmListener):
                 for instr in func.instrs:
                     f.write("{}\n".format(instr))
         # finaly generate hex code
+        pc = 0
         for func_name, func in self.functions.items():
             func.code_pos = len(code)
             for instr in func.instrs:
                 instr_code = instr.genInstrAsm()
                 for i in range(0, len(instr_code)):
                     code.append(instr_code[i])
-                print("{} : {}".format(binascii.b2a_hex(instr_code), instr))
+                #print("{} : {}".format(binascii.b2a_hex(instr_code), instr))
+                #pdb.set_trace()
+                if len(instr_code) == 4 :
+                    hexcode, = struct.unpack("<I", instr_code)
+                    hexstr = struct.pack(">I", hexcode)
+                    print("[PC={}]: {} : {}".format(pc, binascii.b2a_hex(hexstr), instr))
+                    pc = pc + 4
+                else:
+                    hexcode, = struct.unpack("<Q", instr_code)
+                    hexstr = struct.pack(">Q", hexcode)
+                    print("[PC={}]: {} : {}".format(pc, binascii.b2a_hex(hexstr), instr))
+                    pc = pc + 8
+                #print("{} : {}".format(struct.unpack("<i", instr_code), instr))
             func.code_size = len(code) - func.code_pos
 
 
@@ -1269,6 +1311,13 @@ if __name__ == '__main__':
                 k['.kernel_ctrl'] =  kernel_ctrl | bit
         print("after update kernel_ctl {}".format(k['.kernel_ctrl']))
 
+    #mem_image = SparseMemoryImage()
+    #section_idx = 0
+    #section = SparseMemoryImage.Section()
+    #section.name = ".text"
+    #section.addr = section_idx * 0x00000200
+    #section.data = code
+
     #binary = lief.parse("hello_elf.bin")
     binary = lief.parse(os.path.join(os.path.split(os.path.abspath(__file__))[0], "coasm.bin"))
     header = binary.header
@@ -1290,6 +1339,8 @@ if __name__ == '__main__':
     #text_section.content     = [0] * 100
     text_section.size = len(code)
     text_section.content     = code
+    text_section.segments[0].physical_size = text_section.size
+    text_section.segments[0].virtual_size = text_section.size
 
     data_section = binary.get_section(".data")
     #data_sec.size = len(data)
@@ -1307,6 +1358,7 @@ if __name__ == '__main__':
                 symbol.name = symbol.name.replace("vector_copy", name)
                 symbol.value   = text_section.virtual_address + func.code_pos
                 symbol.size    = func.code_size
+                #print("old size {}".format(func.code_size))
                 symtab[symbol.name] = symbol
         #sym = ELF.Symbol()
         #sym.name    = name
@@ -1369,6 +1421,10 @@ if __name__ == '__main__':
     note_section.content = note_content
     note_section.size = len(note_content)
 
-    binary.write(output_file)
+    builder = lief.ELF.Builder(binary)
+    #builder.build_imports(True)
+    builder.build()
+    builder.write(output_file)
+    #binary.write(output_file)
 
 

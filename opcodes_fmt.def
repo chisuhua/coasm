@@ -25,9 +25,10 @@ struct BytesVOP2 {
 
 };
 void printVOP2(BytesVOP2 bytes) {
-printf("pred %x ,imm_ %x ,src0 %x ,dsrc0_ %x ,vsrc1 %x ,vdst %x ,op %x ,enc %x \n", bytes.pred,bytes.imm_,bytes.src0,bytes.dsrc0_,bytes.vsrc1,bytes.vdst,bytes.op,bytes.enc);
-};
+printf("decoding: pred %x ,imm_ %x ,src0 %x ,dsrc0_ %x ,vsrc1 %x ,vdst %x ,op %x ,enc %x \n", bytes.pred,bytes.imm_,bytes.src0,bytes.dsrc0_,bytes.vsrc1,bytes.vdst,bytes.op,bytes.enc);
+printf("ext_field1: imm %x ,src0 %x ,vsrc1 %x ,vdst %x ,ext_enc %x \n", bytes.ext.e1_.imm,bytes.ext.e1_.src0,bytes.ext.e1_.vsrc1,bytes.ext.e1_.vdst,bytes.ext.e1_.ext_enc);
 
+};
 struct BytesVOP1 {
     uint32_t pred : 2;
     uint32_t imm_ : 1;
@@ -57,9 +58,11 @@ struct BytesVOP1 {
 
 };
 void printVOP1(BytesVOP1 bytes) {
-printf("pred %x ,imm_ %x ,src0 %x ,dsrc0_ %x ,op %x ,vdst %x ,enc %x \n", bytes.pred,bytes.imm_,bytes.src0,bytes.dsrc0_,bytes.op,bytes.vdst,bytes.enc);
-};
+printf("decoding: pred %x ,imm_ %x ,src0 %x ,dsrc0_ %x ,op %x ,vdst %x ,enc %x \n", bytes.pred,bytes.imm_,bytes.src0,bytes.dsrc0_,bytes.op,bytes.vdst,bytes.enc);
+printf("ext_field1: imm %x ,vdst %x ,ext_enc %x \n", bytes.ext.e1_.imm,bytes.ext.e1_.vdst,bytes.ext.e1_.ext_enc);
+printf("ext_field2: unused %x ,src0 %x ,vdst %x ,ext_enc %x \n", bytes.ext.e2_.unused,bytes.ext.e2_.src0,bytes.ext.e2_.vdst,bytes.ext.e2_.ext_enc);
 
+};
 struct BytesVOPC {
     uint32_t pred : 2;
     uint32_t imm_ : 1;
@@ -79,16 +82,17 @@ struct BytesVOPC {
 	    uint32_t imm : 22;
 	    uint32_t src0 : 2;
 	    uint32_t vsrc1 : 2;
-	    uint32_t vdst : 2;
+	    uint32_t tcc : 2;
 	    uint32_t ext_enc : 4;
 	} e1_;
 	} ext;
 
 };
 void printVOPC(BytesVOPC bytes) {
-printf("pred %x ,imm_ %x ,src0 %x ,dsrc0_ %x ,vsrc1 %x ,tcc %x ,op %x ,enc %x \n", bytes.pred,bytes.imm_,bytes.src0,bytes.dsrc0_,bytes.vsrc1,bytes.tcc,bytes.op,bytes.enc);
-};
+printf("decoding: pred %x ,imm_ %x ,src0 %x ,dsrc0_ %x ,vsrc1 %x ,tcc %x ,op %x ,enc %x \n", bytes.pred,bytes.imm_,bytes.src0,bytes.dsrc0_,bytes.vsrc1,bytes.tcc,bytes.op,bytes.enc);
+printf("ext_field1: imm %x ,src0 %x ,vsrc1 %x ,tcc %x ,ext_enc %x \n", bytes.ext.e1_.imm,bytes.ext.e1_.src0,bytes.ext.e1_.vsrc1,bytes.ext.e1_.tcc,bytes.ext.e1_.ext_enc);
 
+};
 struct BytesVOP3A {
     uint32_t vdst : 8;
     uint32_t abs : 3;
@@ -103,9 +107,9 @@ struct BytesVOP3A {
     uint32_t neg : 3;
 };
 void printVOP3A(BytesVOP3A bytes) {
-printf("vdst %x ,abs %x ,clamp %x ,reserved %x ,op %x ,enc %x ,src0 %x ,src1 %x ,src2 %x ,omod %x ,neg %x \n", bytes.vdst,bytes.abs,bytes.clamp,bytes.reserved,bytes.op,bytes.enc,bytes.src0,bytes.src1,bytes.src2,bytes.omod,bytes.neg);
-};
+printf("decoding: vdst %x ,abs %x ,clamp %x ,reserved %x ,op %x ,enc %x ,src0 %x ,src1 %x ,src2 %x ,omod %x ,neg %x \n", bytes.vdst,bytes.abs,bytes.clamp,bytes.reserved,bytes.op,bytes.enc,bytes.src0,bytes.src1,bytes.src2,bytes.omod,bytes.neg);
 
+};
 struct BytesVOP3B {
     uint32_t vdst : 8;
     uint32_t sdst : 7;
@@ -117,9 +121,9 @@ struct BytesVOP3B {
     uint32_t lit_const : 16;
 };
 void printVOP3B(BytesVOP3B bytes) {
-printf("vdst %x ,sdst %x ,src0 %x ,op %x ,enc %x ,vsrc1 %x ,ssrc2 %x ,lit_const %x \n", bytes.vdst,bytes.sdst,bytes.src0,bytes.op,bytes.enc,bytes.vsrc1,bytes.ssrc2,bytes.lit_const);
-};
+printf("decoding: vdst %x ,sdst %x ,src0 %x ,op %x ,enc %x ,vsrc1 %x ,ssrc2 %x ,lit_const %x \n", bytes.vdst,bytes.sdst,bytes.src0,bytes.op,bytes.enc,bytes.vsrc1,bytes.ssrc2,bytes.lit_const);
 
+};
 struct BytesSOP1 {
     uint32_t ssrc0 : 8;
     uint32_t op : 7;
@@ -135,9 +139,9 @@ struct BytesSOP1 {
 
 };
 void printSOP1(BytesSOP1 bytes) {
-printf("ssrc0 %x ,op %x ,sdst %x ,enc %x \n", bytes.ssrc0,bytes.op,bytes.sdst,bytes.enc);
-};
+printf("decoding: ssrc0 %x ,op %x ,sdst %x ,enc %x \n", bytes.ssrc0,bytes.op,bytes.sdst,bytes.enc);
 
+};
 struct BytesSOP2 {
     uint32_t ssrc0 : 7;
     uint32_t ssrc1 : 7;
@@ -146,9 +150,9 @@ struct BytesSOP2 {
     uint32_t enc : 4;
 };
 void printSOP2(BytesSOP2 bytes) {
-printf("ssrc0 %x ,ssrc1 %x ,sdst %x ,op %x ,enc %x \n", bytes.ssrc0,bytes.ssrc1,bytes.sdst,bytes.op,bytes.enc);
-};
+printf("decoding: ssrc0 %x ,ssrc1 %x ,sdst %x ,op %x ,enc %x \n", bytes.ssrc0,bytes.ssrc1,bytes.sdst,bytes.op,bytes.enc);
 
+};
 struct BytesSOPK {
     uint32_t simm16 : 16;
     uint32_t sdst : 7;
@@ -156,9 +160,9 @@ struct BytesSOPK {
     uint32_t enc : 4;
 };
 void printSOPK(BytesSOPK bytes) {
-printf("simm16 %x ,sdst %x ,op %x ,enc %x \n", bytes.simm16,bytes.sdst,bytes.op,bytes.enc);
-};
+printf("decoding: simm16 %x ,sdst %x ,op %x ,enc %x \n", bytes.simm16,bytes.sdst,bytes.op,bytes.enc);
 
+};
 struct BytesSOPC {
     uint32_t ssrc0 : 8;
     uint32_t ssrc1 : 8;
@@ -167,9 +171,9 @@ struct BytesSOPC {
     uint32_t lit_const : 32;
 };
 void printSOPC(BytesSOPC bytes) {
-printf("ssrc0 %x ,ssrc1 %x ,op %x ,enc %x ,lit_const %x \n", bytes.ssrc0,bytes.ssrc1,bytes.op,bytes.enc,bytes.lit_const);
-};
+printf("decoding: ssrc0 %x ,ssrc1 %x ,op %x ,enc %x ,lit_const %x \n", bytes.ssrc0,bytes.ssrc1,bytes.op,bytes.enc,bytes.lit_const);
 
+};
 struct BytesSOPP {
     uint32_t pred : 3;
     uint32_t simm12 : 12;
@@ -186,9 +190,9 @@ struct BytesSOPP {
 
 };
 void printSOPP(BytesSOPP bytes) {
-printf("pred %x ,simm12 %x ,tcc %x ,op %x ,enc %x \n", bytes.pred,bytes.simm12,bytes.tcc,bytes.op,bytes.enc);
-};
+printf("decoding: pred %x ,simm12 %x ,tcc %x ,op %x ,enc %x \n", bytes.pred,bytes.simm12,bytes.tcc,bytes.op,bytes.enc);
 
+};
 struct BytesSLS {
     uint32_t offset : 8;
     uint32_t imm : 1;
@@ -198,9 +202,9 @@ struct BytesSLS {
     uint32_t enc : 5;
 };
 void printSLS(BytesSLS bytes) {
-printf("offset %x ,imm %x ,sbase %x ,sdst %x ,op %x ,enc %x \n", bytes.offset,bytes.imm,bytes.sbase,bytes.sdst,bytes.op,bytes.enc);
-};
+printf("decoding: offset %x ,imm %x ,sbase %x ,sdst %x ,op %x ,enc %x \n", bytes.offset,bytes.imm,bytes.sbase,bytes.sdst,bytes.op,bytes.enc);
 
+};
 struct BytesVMUBUF {
     uint32_t offset : 12;
     uint32_t offen : 1;
@@ -221,9 +225,9 @@ struct BytesVMUBUF {
     uint32_t soffset : 8;
 };
 void printVMUBUF(BytesVMUBUF bytes) {
-printf("offset %x ,offen %x ,idxen %x ,glc %x ,addr64 %x ,lds %x ,reserved0 %x ,op %x ,reserved1 %x ,enc %x ,vaddr %x ,vdata %x ,srsrc %x ,reserved2 %x ,slc %x ,tfe %x ,soffset %x \n", bytes.offset,bytes.offen,bytes.idxen,bytes.glc,bytes.addr64,bytes.lds,bytes.reserved0,bytes.op,bytes.reserved1,bytes.enc,bytes.vaddr,bytes.vdata,bytes.srsrc,bytes.reserved2,bytes.slc,bytes.tfe,bytes.soffset);
-};
+printf("decoding: offset %x ,offen %x ,idxen %x ,glc %x ,addr64 %x ,lds %x ,reserved0 %x ,op %x ,reserved1 %x ,enc %x ,vaddr %x ,vdata %x ,srsrc %x ,reserved2 %x ,slc %x ,tfe %x ,soffset %x \n", bytes.offset,bytes.offen,bytes.idxen,bytes.glc,bytes.addr64,bytes.lds,bytes.reserved0,bytes.op,bytes.reserved1,bytes.enc,bytes.vaddr,bytes.vdata,bytes.srsrc,bytes.reserved2,bytes.slc,bytes.tfe,bytes.soffset);
 
+};
 struct BytesVLS {
     uint32_t offset : 7;
     uint32_t vaddr : 6;
@@ -252,9 +256,11 @@ struct BytesVLS {
 
 };
 void printVLS(BytesVLS bytes) {
-printf("offset %x ,vaddr %x ,ssrc0_ %x ,vdata %x ,slc %x ,op %x ,enc %x \n", bytes.offset,bytes.vaddr,bytes.ssrc0_,bytes.vdata,bytes.slc,bytes.op,bytes.enc);
-};
+printf("decoding: offset %x ,vaddr %x ,ssrc0_ %x ,vdata %x ,slc %x ,op %x ,enc %x \n", bytes.offset,bytes.vaddr,bytes.ssrc0_,bytes.vdata,bytes.slc,bytes.op,bytes.enc);
+printf("ext_field1: imm %x ,ext_enc %x \n", bytes.ext.e1_.imm,bytes.ext.e1_.ext_enc);
+printf("ext_field2: imm %x ,vaddr %x ,vdata %x ,ext_enc %x \n", bytes.ext.e2_.imm,bytes.ext.e2_.vaddr,bytes.ext.e2_.vdata,bytes.ext.e2_.ext_enc);
 
+};
 struct BytesDLS {
     uint32_t offset0 : 8;
     uint32_t offset1 : 8;
@@ -268,5 +274,6 @@ struct BytesDLS {
     uint32_t vdst : 8;
 };
 void printDLS(BytesDLS bytes) {
-printf("offset0 %x ,offset1 %x ,reserved %x ,gds %x ,op %x ,enc %x ,addr %x ,data0 %x ,data1 %x ,vdst %x \n", bytes.offset0,bytes.offset1,bytes.reserved,bytes.gds,bytes.op,bytes.enc,bytes.addr,bytes.data0,bytes.data1,bytes.vdst);
+printf("decoding: offset0 %x ,offset1 %x ,reserved %x ,gds %x ,op %x ,enc %x ,addr %x ,data0 %x ,data1 %x ,vdst %x \n", bytes.offset0,bytes.offset1,bytes.reserved,bytes.gds,bytes.op,bytes.enc,bytes.addr,bytes.data0,bytes.data1,bytes.vdst);
+
 };
