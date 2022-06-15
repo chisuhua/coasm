@@ -47,6 +47,7 @@ class MemSpace:
         INVALID = 0
         GLOBAL = 1
         SHARED = 2
+        PRIVATE = 3
     def __init__(self, string):
         self.kind = MemSpace.KindEnum.INVALID
         if string.startswith("."):
@@ -57,6 +58,9 @@ class MemSpace:
         elif string == "shared":
             self.kind = MemSpace.KindEnum.SHARED
             self.name = "shared"
+        elif string == "private":
+            self.kind = MemSpace.KindEnum.PRIVATE
+            self.name = "private"
         else:
             assert("dont't know the space {}".format(string))
 
@@ -524,7 +528,7 @@ class OpType(Enum):
     IALU_OP = 0
     IALU_LONG_OP = 1
     FALU_OP = 2
-    SFP_OP = 3
+    SFU_OP = 3
     TENSOR_OP = 4
     INTP_OP = 5
     ALU_SFU_OP = 6
@@ -539,6 +543,40 @@ class OpType(Enum):
     CALL_OP = 15
     RET_OP = 16
     EXIT_OP = 17
+
+class AtomicOpType(Enum):
+    ATOMIC_POPC = 0
+    ATOMIC_AND = 1
+    ATOMIC_OR = 2
+    ATOMIC_XOR = 3
+    ATOMIC_CAS = 4
+    ATOMIC_EXCH = 5
+    ATOMIC_ADD = 6
+    ATOMIC_INC = 7
+    ATOMIC_DEC = 8
+    ATOMIC_MIN = 9
+    ATOMIC_MAX = 10
+
+class CacheOpType(Enum):
+    #// loads
+    CACHE_ALL = 0 #,       // .ca
+    CACHE_LAST_USE = 1 #,  // .lu
+    CACHE_VOLATILE = 2 #,  // .cv
+    CACHE_L1  = 3# ,        // .nc
+
+    #// loads and stores
+    CACHE_STREAMING = 4#,  // .cs
+    CACHE_GLOBAL = 5#,     // .cg
+
+    #// stores
+    CACHE_WRITE_BACK = 6#,    // .wb
+    CACHE_WRITE_THROUGH = 7 # // .wt
+
+class MemOpType(Enum):
+    INVALID = 0
+    LOAD = 1
+    STORE = 2
+
 
 # add default optype, dst_reg
 def decode_OpType(op):

@@ -45,7 +45,32 @@ tpl = env.get_template("coasm.h.tpl")
 optype_list = ""
 for n, v in OpType._member_map_.items():
     optype_list += ",\n{} = {}".format(n, v.value)
-tpl_out = tpl.render(OpTypeList=optype_list)
+
+atomic_list = ""
+for n, v in AtomicOpType._member_map_.items():
+    atomic_list += ",\n{} = {}".format(n, v.value)
+
+datatype_list = ""
+for n, v in DataType.TypeEnum._member_map_.items():
+    datatype_list += ",\n{} = {}".format(n, v.value)
+
+cacheop_list = ""
+for n, v in CacheOpType._member_map_.items():
+    cacheop_list += ",\n{} = {}".format(n, v.value)
+
+mspace_list = ""
+for n, v in MemSpace.KindEnum._member_map_.items():
+    if mspace_list != "":
+        mspace_list += ","
+    mspace_list += "\n{} = {}".format(n, v.value)
+
+memop_list = ""
+for n, v in MemOpType._member_map_.items():
+    if memop_list != "":
+        memop_list += ","
+    memop_list += "\n{} = {}".format(n, v.value)
+
+tpl_out = tpl.render(OpTypeList=optype_list, OpAtomicList=atomic_list, DataTypeList=datatype_list, CacheOpList=cacheop_list, MSpaceList=mspace_list, MemopList=memop_list)
 with open(os.path.join(path, "coasm.h"), 'w') as f:
     f.writelines(tpl_out)
 
