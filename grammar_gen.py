@@ -70,7 +70,14 @@ for n, v in MemOpType._member_map_.items():
         memop_list += ","
     memop_list += "\n{} = {}".format(n, v.value)
 
-tpl_out = tpl.render(OpTypeList=optype_list, OpAtomicList=atomic_list, DataTypeList=datatype_list, CacheOpList=cacheop_list, MSpaceList=mspace_list, MemopList=memop_list)
+pipeline_list = ""
+for n, v in OpPipeline._member_map_.items():
+    if pipeline_list != "":
+        pipeline_list += ","
+    pipeline_list += "\n{} = {}".format(n, v.value)
+
+
+tpl_out = tpl.render(OpTypeList=optype_list, OpAtomicList=atomic_list, DataTypeList=datatype_list, CacheOpList=cacheop_list, MSpaceList=mspace_list, MemopList=memop_list, PipelineList=pipeline_list)
 with open(os.path.join(path, "coasm.h"), 'w') as f:
     f.writelines(tpl_out)
 

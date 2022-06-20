@@ -28,3 +28,7 @@ enum class opu_memop_t {
   {{MemopList}}
 };
 
+enum class opu_pipeline_t {
+  {{PipelineList}}
+};
+

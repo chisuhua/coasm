@@ -525,9 +525,10 @@ common_enc["max_barcount"] = CommonEnc(4, 8)
 #    the EXT 32bit 's decoding is depend on next instruction enc
 # the Instr is created with enterInstruction in assembler.py , which pas op name as arg
 class OpType(Enum):
-    IALU_OP = 0
-    IALU_LONG_OP = 1
-    FALU_OP = 2
+    INT_OP = 0
+    INT_LONG_OP = 1
+    SP_OP = 2
+    DP_OP = 18
     SFU_OP = 3
     TENSOR_OP = 4
     INTP_OP = 5
@@ -543,6 +544,16 @@ class OpType(Enum):
     CALL_OP = 15
     RET_OP = 16
     EXIT_OP = 17
+
+class OpPipeline(Enum):
+    SP__OP = 0
+    DP__OP = 1
+    INT__OP = 2
+    SFU__OP = 3
+    TENSOR__OP = 4
+    MEM__OP = 5
+    SPECIALIZED__OP = 6
+
 
 class AtomicOpType(Enum):
     ATOMIC_POPC = 0
@@ -583,9 +594,9 @@ def decode_OpType(op):
     if (len(op) == 2):
         op_name = op[0]
         if op_name.find("_F32") > 0:
-            op = (*op, OpType.FALU_OP, 0)
+            op = (*op, OpType.SP_OP, 0)
         elif op_name.find("_F64") > 0:
-            op = (*op, OpType.FALU_OP, 0)
+            op = (*op, OpType.DP_OP, 0)
         elif op_name.find("_LOAD") > 0:
             op = (*op, OpType.LOAD_OP, 0)
         elif op_name.find("_STORE") > 0:
@@ -593,7 +604,7 @@ def decode_OpType(op):
         elif op_name.find("BRANCH") > 0:
             op = (*op, OpType.BRANCH_OP, 0)
         else:
-            op = (*op, OpType.IALU_OP, 0)
+            op = (*op, OpType.INT_OP, 0)
     elif (len(op) == 3):
             op = (*op, 0)
     return op

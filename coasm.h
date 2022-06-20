@@ -3,9 +3,10 @@
 enum class opu_op_t {
   NO_OP = -1
   ,
-IALU_OP = 0,
-IALU_LONG_OP = 1,
-FALU_OP = 2,
+INT_OP = 0,
+INT_LONG_OP = 1,
+SP_OP = 2,
+DP_OP = 18,
 SFU_OP = 3,
 TENSOR_OP = 4,
 INTP_OP = 5,
@@ -91,4 +92,15 @@ enum class opu_memop_t {
 INVALID = 0,
 LOAD = 1,
 STORE = 2
+};
+
+enum class opu_pipeline_t {
+  
+SP__OP = 0,
+DP__OP = 1,
+INT__OP = 2,
+SFU__OP = 3,
+TENSOR__OP = 4,
+MEM__OP = 5,
+SPECIALIZED__OP = 6
 };
