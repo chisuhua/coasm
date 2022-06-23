@@ -84,7 +84,9 @@ enum class opu_mspace_t {
 INVALID = 0,
 GLOBAL = 1,
 SHARED = 2,
-PRIVATE = 3
+PRIVATE = 3,
+CONST = 4,
+PARAM = 5
 };
 
 enum class opu_memop_t {

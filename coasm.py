@@ -48,6 +48,8 @@ class MemSpace:
         GLOBAL = 1
         SHARED = 2
         PRIVATE = 3
+        CONST = 4
+        PARAM = 5
     def __init__(self, string):
         self.kind = MemSpace.KindEnum.INVALID
         if string.startswith("."):
