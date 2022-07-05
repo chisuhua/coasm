@@ -1353,9 +1353,9 @@ if __name__ == '__main__':
         name = k['.name']
         func = ref_phase.functions[name]
         for symbol in binary.symbols:
-            if symbol.name.startswith("vector_copy"):
+            if symbol.name.startswith("vector_copy_long_long_long_long_long_long_long_long_long_long_long_name"):
                 #pdb.set_trace()
-                symbol.name = symbol.name.replace("vector_copy", name)
+                symbol.name = symbol.name.replace("vector_copy_long_long_long_long_long_long_long_long_long_long_long_name", name)
                 symbol.value   = text_section.virtual_address + func.code_pos
                 symbol.size    = func.code_size
                 #print("old size {}".format(func.code_size))
