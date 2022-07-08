@@ -1233,7 +1233,7 @@ if __name__ == '__main__':
         else:
             asm_input.append(fixSpecialRegALias(line))
 
-    kernel_meta_raw = yaml.load("".join(metas))
+    kernel_meta_raw = yaml.load("".join(metas), Loader=yaml.FullLoader)
     kernel_meta = kernel_meta_raw["opu.kernels"]
 
     kernels = {}
@@ -1387,8 +1387,8 @@ if __name__ == '__main__':
             #sym.size    = symtab[kname].size
             #binary.add_static_symbol(sym)
 
-    dynamic_entry = ELF.DynamicEntry(ELF.DYNAMIC_TAGS.VERSYM, 7)
-    binary.add(dynamic_entry)
+    #dynamic_entry = ELF.DynamicEntry(ELF.DYNAMIC_TAGS.VERSYM, 7)
+    #binary.add(dynamic_entry)
 
     note_name = list(bytes("OPU.Kernels", encoding='utf-8'))
     note_meta = [c for c in msgpack.packb([kernel_meta], use_bin_type=True)]
@@ -1398,19 +1398,16 @@ if __name__ == '__main__':
     #notes = binary.notes
     #notes[0].description = note_meta
 
-    old_note_section = binary.get_section(".note")
-    #note_section.clear()
-    #pdb.set_trace()
-    note_section = ELF.Section(".note")
-    note_section = binary.add(note_section)
-    #note_section.flags = ELF.SECTION_TYPES.NOTE
-    note_section.flags = old_note_section.flags
-    #note_section.infomation = old_note_section.infomation
-    note_section.link = old_note_section.link
-    note_section.alignment = old_note_section.alignment
-    note_section.type = old_note_section.type
-    note_section.virtual_address = old_note_section.virtual_address
-    binary.remove(old_note_section)
+    note_section = binary.get_section(".note")
+    #note_section = ELF.Section(".note")
+    #note_section = binary.add(note_section)
+    ##note_section.flags = ELF.SECTION_TYPES.NOTE
+    #note_section.flags = old_note_section.flags
+    ##note_section.infomation = old_note_section.infomation
+    #note_section.link = old_note_section.link
+    #note_section.alignment = old_note_section.alignment
+    #note_section.type = old_note_section.type
+    #note_section.virtual_address = old_note_section.virtual_address
 
     note_content = list(len(note_name).to_bytes(4, byteorder='little', signed=False))
     note_content.extend(list((len(note_meta) - 1).to_bytes(4, byteorder='little', signed=False)))
