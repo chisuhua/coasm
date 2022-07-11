@@ -113,7 +113,7 @@ class Kernel(KernelSymbol):
         self.mode['trap_en'] = 0
         self.mode['debug_en'] = 0
         self.resource = {}
-        self.resource['vreg_number'] = 0
+        self.resource['vreg_number'] = 16
         self.resource['sreg_number'] = 0
         self.resource['dreg_number'] = 0
         self.resource['tcc_number'] = 0
@@ -1310,6 +1310,11 @@ if __name__ == '__main__':
                 bit = 0x1 << reg.ctrl_bit
                 k['.kernel_ctrl'] =  kernel_ctrl | bit
         print("after update kernel_ctl {}".format(k['.kernel_ctrl']))
+        k['.shared_memsize'] =  kernel.resource['smem_size']
+        k['.private_memsize'] =  kernel.resource['stack_size']
+        k['.vreg_used'] =  kernel.resource['vreg_number']
+        k['.sreg_used'] =  kernel.resource['sreg_number']
+        k['.dreg_used'] =  kernel.resource['dreg_number']
 
     #mem_image = SparseMemoryImage()
     #section_idx = 0
@@ -1377,6 +1382,8 @@ if __name__ == '__main__':
             pass
         else:
             assert("error")
+        for i,j in k.items():
+            print("{}:{}".format(i, j))
             #sym = symtab[kname]
             #sym = ELF.Symbol()
             #sym.name    = k['.symbol']
